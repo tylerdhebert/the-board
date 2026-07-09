@@ -55,6 +55,7 @@
     "underlying_primitive": { "type": "string", "description": "The core CS concept the student must possess, phrased for picking an analogy if they lack it, e.g. 'O(1) membership/lookup by key'." },
     "examples": {
       "type": "array",
+      "minItems": 2,
       "items": {
         "type": "object",
         "additionalProperties": false,
