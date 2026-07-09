@@ -9,6 +9,8 @@ import { judgeUnlock } from './unlockJudge.js';
 export interface RoleConfig { backend: string; model: string }
 export interface SessionModels { teacher: RoleConfig; gate: RoleConfig; unlock: RoleConfig }
 
+export type TurnStage = 'unlock' | 'draft' | 'gate' | 'redraft';
+
 export interface TurnResult {
   mode: TutorMode;
   reply: string;
@@ -69,7 +71,7 @@ export class TutorSession {
     return this._lockedTerms.slice();
   }
 
-  async submit(studentMessage: string): Promise<TurnResult> {
+  async submit(studentMessage: string, onStage?: (stage: TurnStage) => void): Promise<TurnResult> {
     const turn = ++this.turnCounter;
     const lockedBefore = [...this._lockedTerms];
 
@@ -85,6 +87,7 @@ export class TutorSession {
           break;
         }
       }
+      onStage?.('unlock');
       const result = await judgeUnlock(
         this.unlockClient, this._lockedTerms, prevTeacher, studentMessage, this.models.unlock.model,
       );
@@ -95,19 +98,23 @@ export class TutorSession {
       }
     }
 
+    onStage?.('draft');
     let t = await teacherTurn(
       this.teacherClient, this.card, this._transcript, this._lockedTerms, this.models.teacher.model,
     );
+    onStage?.('gate');
     let verdict = await gateCheck(
       this.gateClient, this.card, t.mode, studentMessage, t.reply, this._lockedTerms, this.models.gate.model,
     );
     let redrafted = false;
 
     if (verdict.verdict === 'REVISE') {
+      onStage?.('redraft');
       t = await teacherTurn(
         this.teacherClient, this.card, this._transcript, this._lockedTerms, this.models.teacher.model,
         { rejectedDraft: t.reply, note: verdict.note },
       );
+      onStage?.('gate');
       verdict = await gateCheck(
         this.gateClient, this.card, t.mode, studentMessage, t.reply, this._lockedTerms, this.models.gate.model,
       );

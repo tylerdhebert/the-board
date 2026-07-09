@@ -432,6 +432,10 @@ body::before {
 .thinking .dot:nth-child(3) { animation-delay: 0.36s; }
 @keyframes pulse { 0%,100%{opacity:0.25;transform:translateY(0)} 50%{opacity:1;transform:translateY(-3px)} }
 
+/* typewriter caret while the tutor's reply reveals */
+.say .caret { color: var(--amber); animation: caret-blink 0.9s steps(1) infinite; }
+@keyframes caret-blink { 0%,100%{opacity:1} 50%{opacity:0.15} }
+
 /* composer */
 .composer { padding: 14px 22px 18px; }
 .composer .row { display: flex; gap: 10px; align-items: flex-end; }
@@ -493,4 +497,5 @@ body::before {
 
 @media (prefers-reduced-motion: reduce) {
   .thinking .dot { animation: none; }
+  .say .caret { animation: none; }
 }

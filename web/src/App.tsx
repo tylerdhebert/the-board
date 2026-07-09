@@ -7,6 +7,7 @@ import {
   submitTurn,
   type CardRef,
   type Problem,
+  type TurnStage,
 } from './api'
 
 const LANGS = ['csharp', 'typescript', 'python', 'javascript', 'java', 'cpp', 'go'] as const
@@ -71,6 +72,62 @@ type Note = {
   mode?: Mode
   unlocked?: string[]
   redrafted?: boolean
+  revealing?: boolean
+}
+
+const STAGE_COPY: Record<TurnStage, string> = {
+  unlock: "checking what you've earned…",
+  draft: 'thinking about your move…',
+  gate: "making sure i'm not giving it away…",
+  redraft: 'rewording — i almost said too much…',
+}
+
+function RevealingText({
+  text,
+  onDone,
+  onGrow,
+}: {
+  text: string
+  onDone: () => void
+  onGrow: () => void
+}) {
+  const [n, setN] = useState(0)
+  const doneRef = useRef(false)
+  const onDoneRef = useRef(onDone)
+  const onGrowRef = useRef(onGrow)
+  onDoneRef.current = onDone
+  onGrowRef.current = onGrow
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      setN((v) => {
+        if (v >= text.length) return v
+        return Math.min(v + 3, text.length)
+      })
+    }, 16)
+    return () => clearInterval(t)
+  }, [text.length])
+
+  useEffect(() => {
+    onGrowRef.current()
+    if (n >= text.length && !doneRef.current) {
+      doneRef.current = true
+      onDoneRef.current()
+    }
+  }, [n, text.length])
+
+  function finish() {
+    if (doneRef.current) return
+    setN(text.length)
+  }
+
+  const done = n >= text.length
+  return (
+    <p className="say" onClick={finish} style={done ? undefined : { cursor: 'pointer' }}>
+      {text.slice(0, n)}
+      {!done && <span className="caret">▌</span>}
+    </p>
+  )
 }
 
 function reviewPrompt(code: string): string {
@@ -92,6 +149,7 @@ export default function App() {
   const [seed, setSeed] = useState('') // the scaffold currently loaded, to detect edits
   const [lang, setLang] = useState<string>('typescript')
   const [busy, setBusy] = useState(false)
+  const [stage, setStage] = useState<TurnStage | null>(null)
   const [loading, setLoading] = useState(false)
   const [ingesting, setIngesting] = useState(false)
   const [loadingQuery, setLoadingQuery] = useState('')
@@ -102,10 +160,14 @@ export default function App() {
     getCards().then(setCards).catch(() => {})
   }, [])
 
-  useEffect(() => {
+  function scrollNotes() {
     const el = notesRef.current
     if (el) el.scrollTop = el.scrollHeight
-  }, [notes, busy])
+  }
+
+  useEffect(() => {
+    scrollNotes()
+  }, [notes, busy, stage])
 
   async function loadProblem() {
     const q = query.trim()
@@ -140,17 +202,30 @@ export default function App() {
     if (!sessionId || busy) return
     setNotes((p) => [...p, { role: 'student', text: displayText ?? sendText }])
     setBusy(true)
+    setStage(null)
     try {
-      const r = await submitTurn(sessionId, sendText)
+      const r = await submitTurn(sessionId, sendText, setStage)
       setNotes((p) => [
         ...p,
-        { role: 'tutor', text: r.reply, mode: r.mode, unlocked: r.unlockedThisTurn, redrafted: r.redrafted },
+        {
+          role: 'tutor',
+          text: r.reply,
+          mode: r.mode,
+          unlocked: r.unlockedThisTurn,
+          redrafted: r.redrafted,
+          revealing: true,
+        },
       ])
     } catch (err) {
       setNotes((p) => [...p, { role: 'tutor', text: err instanceof Error ? err.message : String(err) }])
     } finally {
       setBusy(false)
+      setStage(null)
     }
+  }
+
+  function finishReveal(index: number) {
+    setNotes((p) => p.map((n, i) => (i === index ? { ...n, revealing: false } : n)))
   }
 
   function send() {
@@ -295,8 +370,16 @@ export default function App() {
                   {n.mode && <span className={`badge ${n.mode}`}>{n.mode}</span>}
                   {n.redrafted && <span className="badge revised">reworded</span>}
                 </div>
-                <p className="say">{n.text}</p>
-                {n.unlocked && n.unlocked.length > 0 && (
+                {n.revealing ? (
+                  <RevealingText
+                    text={n.text}
+                    onDone={() => finishReveal(i)}
+                    onGrow={scrollNotes}
+                  />
+                ) : (
+                  <p className="say">{n.text}</p>
+                )}
+                {!n.revealing && n.unlocked && n.unlocked.length > 0 && (
                   <p className="unlocked">
                     <b>✓ you've got it:</b> {n.unlocked.join(' · ')}
                   </p>
@@ -308,7 +391,7 @@ export default function App() {
                 <span className="dot" />
                 <span className="dot" />
                 <span className="dot" />
-                thinking about your move…
+                {stage ? STAGE_COPY[stage] : 'reading your move…'}
               </div>
             )}
           </div>

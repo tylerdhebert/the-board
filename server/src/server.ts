@@ -30,6 +30,10 @@ function sendJson(res: http.ServerResponse, status: number, body: unknown): void
   res.end(payload);
 }
 
+function sendEvent(res: http.ServerResponse, event: string, data: unknown): void {
+  res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+}
+
 async function readJsonBody(req: http.IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = [];
   for await (const chunk of req) {
@@ -122,13 +126,26 @@ async function handle(
       sendJson(res, 400, { error: 'message is required' });
       return;
     }
-    const result = await session.submit(message);
-    sendJson(res, 200, {
-      reply: result.reply,
-      mode: result.mode,
-      unlockedThisTurn: result.unlockedThisTurn,
-      redrafted: result.redrafted,
+    res.writeHead(200, {
+      ...CORS,
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
     });
+    try {
+      const result = await session.submit(message, (stage) => sendEvent(res, 'stage', { stage }));
+      sendEvent(res, 'result', {
+        reply: result.reply,
+        mode: result.mode,
+        unlockedThisTurn: result.unlockedThisTurn,
+        redrafted: result.redrafted,
+      });
+      res.end();
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      sendEvent(res, 'error', { error: errMsg });
+      res.end();
+    }
     return;
   }
 
@@ -138,7 +155,11 @@ async function handle(
 const server = http.createServer((req, res) => {
   handle(req, res).catch((err: unknown) => {
     const message = err instanceof Error ? err.message : String(err);
-    sendJson(res, 500, { error: message });
+    if (!res.headersSent) {
+      sendJson(res, 500, { error: message });
+    } else {
+      res.end();
+    }
   });
 });
 
