@@ -138,12 +138,17 @@ restart 8787 to pick it up (tsx isn't in watch mode). Web changes hot-reload.
    resume (transcript + editor buffer + lang + last run), fresh start,
    wordmark = way home. Solved marked server-side on an all-pass run.
    `/api/cards` deleted → `/api/problems`.
-7. **NEXT (user, 2026-07-09): migrate persistence to a SQLite DB** — all of
-   this stuff (sessions, ledger state; probably cards/snippets stay as files
-   or move too — decide). User said: think CROSS-PLATFORM ideally (native
-   module prebuilds are the trap: node:sqlite (node ≥22 built-in) vs
-   better-sqlite3; node:sqlite needs no compile/prebuilds and is the
-   cross-platform-safe default — evaluate before speccing).
+7. ~~**SQLite migration**~~ SHIPPED 2026-07-09 (`acd0582`, spec
+   `.agent-tasks/sqlite-store.md`). Persistence backs onto `tutor.db`
+   (gitignored, repo root) via **node:sqlite** — built into node ≥22, zero
+   deps, no native prebuilds, cross-platform by construction. sessionStore.ts
+   API unchanged (that seam was the whole point); cards/snippets stay as
+   git-committed files. Boot migration imports legacy `sessions/*.json` →
+   renames dir to `sessions.migrated/`. LESSON for future specs: the
+   implementing subagent used the REAL store paths as test fixtures and its
+   own cleanup sweep killed it mid-run (and the running desktop api) — test
+   fixtures must use isolated paths, and broad process kills are banned.
+8. **API-client backends** — see item 5 above (unchanged, waiting on keys).
 
 ## Recently shipped
 - **2026-07-09 (streaming session):** SSE stage streaming + typewriter reveal
