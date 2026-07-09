@@ -55,10 +55,9 @@ cd web && npx vite
 Requires `codex` (and optionally `claude`) CLI on PATH. First novel problem
 takes ~30–60s to ingest, then it's cached in `cards/`.
 
-**NOTE (2026-07-09):** a server is currently running on **8787** and web on
-**5175** (started via background tasks this session). If you change `server/` or
-`engine/` code you must restart 8787 to pick it up (tsx isn't in watch mode).
-Web changes hot-reload.
+**NOTE (2026-07-09, streaming session):** the stack is running via `npm run dev`
+(api **8787**, web **5173**). If you change `server/` or `engine/` code you must
+restart 8787 to pick it up (tsx isn't in watch mode). Web changes hot-reload.
 
 ## Conventions & gotchas (learned the hard way)
 - **Implementer = Grok 4.5 via Cursor** (`grok-4.5-xhigh`), driven through the
@@ -79,14 +78,15 @@ Web changes hot-reload.
   works; save to `$TEMP/tutor-shots` and Read the PNG.
 
 ## Roadmap (user's stated priorities, in order)
-1. **Streaming** (NEXT). ⚠️ Design constraint: you CANNOT stream the raw teacher
-   reply to the student — the gate must vet the full draft first or a leak
-   streams out before it's caught. So "streaming" here = stream **progress
-   stages** over SSE ("drafting…", "checking I'm not giving it away…") + a
-   **typewriter reveal** of the gated reply. Reduces *perceived* latency (~15s/turn)
-   honestly. Needs: `TutorSession.submit(msg, onStage?)`, an SSE endpoint, client
-   EventSource + typewriter.
-2. **C# language server** (wants C# + TS as primary langs; Python later). Monaco
+1. ~~**Streaming**~~ SHIPPED 2026-07-09 (`fd17dac`, spec `.agent-tasks/streaming.md`).
+   Stage events (`unlock|draft|gate|redraft`) stream over **SSE on the POST**
+   (client reads with a fetch stream reader, deliberately NOT EventSource —
+   auto-reconnect would resubmit the turn), then a typewriter reveal (~180
+   chars/s, click-to-finish, unlocked line lands after the reveal). The raw
+   teacher draft still never leaves the server before the gate approves it.
+   Implemented by Grok 4.5 via cursor-subagent; verified live end to end
+   (unlock → draft → gate → REVISE → redraft → re-gate in one real turn).
+2. **C# language server** (NEXT; wants C# + TS as primary langs; Python later). Monaco
    gives real IntelliSense for JS/TS free (bundled TS worker) but only word-based
    completion for C#/others. Real C# IntelliSense = run a language server
    (OmniSharp / Roslyn) and bridge via `monaco-languageclient` over WebSocket
@@ -97,7 +97,9 @@ Web changes hot-reload.
    removes `completeJson`'s parse-guessing. No keys in env as of this session;
    user churns CLI subscriptions (codex/cursor/opencode), so CLI adapters matter.
 
-## Recently shipped (this session)
-Engine Increments 1–7, server, web UI, "The Board" redesign, Monaco + review,
-on-the-fly name/link ingest, chalk loading state, root `npm run dev` launcher,
-and LeetCode code-scaffold seeding. All committed.
+## Recently shipped
+- **2026-07-09 (streaming session):** SSE stage streaming + typewriter reveal
+  (`fd17dac`, see roadmap item 1). Committed and verified live.
+- **Earlier sessions:** Engine Increments 1–7, server, web UI, "The Board"
+  redesign, Monaco + review, on-the-fly name/link ingest, chalk loading state,
+  root `npm run dev` launcher, LeetCode code-scaffold seeding. All committed.
