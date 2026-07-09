@@ -6,7 +6,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "tsc",
-    "dev": "tsx"
+    "dev": "tsx",
+    "cli": "tsx src/cli.ts"
   },
   "devDependencies": {
     "@types/node": "^22",

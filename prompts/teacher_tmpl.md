@@ -81,5 +81,5 @@ Return to socratic mode as soon as the student is moving under their own power.
 
 ## Conversation so far
 {{transcript}}
-
+{{gate_feedback}}
 Produce ONLY your next reply (starting with the MODE line). No preamble.

@@ -10,6 +10,7 @@ export interface TeacherReply { mode: TutorMode; reply: string; raw: string }
 export async function teacherTurn(
   client: LLMClient, card: ProblemCard, transcript: Message[],
   lockedTerms: string[], model: string,
+  gateFeedback?: { rejectedDraft: string; note: string },
 ): Promise<TeacherReply> {
   const tpl = await readFile(join(PROMPTS_DIR, 'teacher_tmpl.md'), 'utf-8');
   const traps = bullets(
@@ -21,6 +22,9 @@ export async function teacherTurn(
       return line;
     }),
   );
+  const gate_feedback = gateFeedback === undefined
+    ? ''
+    : `Your previous draft was REJECTED by the safety gate for: ${gateFeedback.note}\nRejected draft:\n${gateFeedback.rejectedDraft}\nRewrite it to satisfy the gate (reveal LESS, or switch mode if that is the right move).`;
   const prompt = fillTemplate(tpl, {
     title: card.title,
     statement: card.statement,
@@ -33,6 +37,7 @@ export async function teacherTurn(
     traps,
     leak_terms: bullets(lockedTerms),
     transcript: renderTranscript(transcript),
+    gate_feedback,
   });
 
   const raw = await client.complete({ model, prompt });
