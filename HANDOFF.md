@@ -130,9 +130,20 @@ restart 8787 to pick it up (tsx isn't in watch mode). Web changes hot-reload.
    `LLMClient`) for when the user has API keys — faster + structured JSON output
    removes `completeJson`'s parse-guessing. No keys in env as of this session;
    user churns CLI subscriptions (codex/cursor/opencode), so CLI adapters matter.
-6. Ideas discussed 2026-07-09, not committed to: **session persistence**
-   (in-memory Map dies with the server — biggest fragility), a
-   **solved-problems ledger** (sense of progression).
+6. ~~**Persistence + the ledger**~~ SHIPPED 2026-07-09 (`fc99e79`, spec
+   `.agent-tasks/persistence-ledger.md`). Write-through JSON-per-session in
+   gitignored `sessions/` + transparent rehydration (unknown session id →
+   restore from disk; `TutorSession` has a `restore` constructor opt). Hero
+   pane = the ledger: status marks (✓/~/·), per-problem session history,
+   resume (transcript + editor buffer + lang + last run), fresh start,
+   wordmark = way home. Solved marked server-side on an all-pass run.
+   `/api/cards` deleted → `/api/problems`.
+7. **NEXT (user, 2026-07-09): migrate persistence to a SQLite DB** — all of
+   this stuff (sessions, ledger state; probably cards/snippets stay as files
+   or move too — decide). User said: think CROSS-PLATFORM ideally (native
+   module prebuilds are the trap: node:sqlite (node ≥22 built-in) vs
+   better-sqlite3; node:sqlite needs no compile/prebuilds and is the
+   cross-platform-safe default — evaluate before speccing).
 
 ## Recently shipped
 - **2026-07-09 (streaming session):** SSE stage streaming + typewriter reveal
