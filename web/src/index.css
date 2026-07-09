@@ -66,7 +66,7 @@ body::before {
   content: '';
   position: absolute;
   inset: 0;
-  border: 2px solid var(--chalk-line);
+  border: 2.5px solid var(--chalk-line);
   filter: url(#chalk-rough);
   pointer-events: none;
 }
@@ -389,6 +389,26 @@ body::before {
   white-space: pre-wrap;
   text-shadow: 0 0 8px rgba(236,230,214,0.06);
 }
+/* markdown inside tutor notes: code in colored chalk */
+.say code {
+  font-family: var(--mono);
+  font-size: 0.86em;
+  color: var(--sky);
+  background: rgba(143, 196, 203, 0.09);
+  padding: 1px 5px;
+}
+.say pre {
+  margin: 8px 0;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.25);
+  overflow-x: auto;
+}
+.say pre code {
+  background: transparent;
+  padding: 0;
+  font-size: 12.5px;
+}
+
 .note .who {
   font-family: var(--mono);
   font-size: 10px;

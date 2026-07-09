@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import CodeEditor from './CodeEditor'
+import { mdLength, parseMd, renderMd } from './md'
 import {
   createSession,
   getCards,
@@ -98,33 +99,38 @@ function RevealingText({
   onDoneRef.current = onDone
   onGrowRef.current = onGrow
 
+  // Reveal budget runs over parsed segments (markdown markers excluded), so
+  // code/bold style in as they appear instead of raw backticks popping.
+  const segs = useMemo(() => parseMd(text), [text])
+  const total = useMemo(() => mdLength(segs), [segs])
+
   useEffect(() => {
     const t = setInterval(() => {
       setN((v) => {
-        if (v >= text.length) return v
-        return Math.min(v + 3, text.length)
+        if (v >= total) return v
+        return Math.min(v + 3, total)
       })
     }, 16)
     return () => clearInterval(t)
-  }, [text.length])
+  }, [total])
 
   useEffect(() => {
     onGrowRef.current()
-    if (n >= text.length && !doneRef.current) {
+    if (n >= total && !doneRef.current) {
       doneRef.current = true
       onDoneRef.current()
     }
-  }, [n, text.length])
+  }, [n, total])
 
   function finish() {
     if (doneRef.current) return
-    setN(text.length)
+    setN(total)
   }
 
-  const done = n >= text.length
+  const done = n >= total
   return (
     <p className="say" onClick={finish} style={done ? undefined : { cursor: 'pointer' }}>
-      {text.slice(0, n)}
+      {renderMd(segs, n)}
       {!done && <span className="caret">▌</span>}
     </p>
   )
@@ -271,7 +277,7 @@ export default function App() {
           <feDisplacementMap in="SourceGraphic" in2="n" scale="7" result="d" />
           {/* dry-chalk grain: high-frequency noise erodes the stroke's alpha */}
           <feTurbulence type="fractalNoise" baseFrequency="0.4" numOctaves="2" seed="3" result="grain" />
-          <feColorMatrix in="grain" type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1.6 -0.2" result="mask" />
+          <feColorMatrix in="grain" type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1.6 -0.12" result="mask" />
           <feComposite in="d" in2="mask" operator="in" />
         </filter>
       </svg>
@@ -382,7 +388,7 @@ export default function App() {
                     onGrow={scrollNotes}
                   />
                 ) : (
-                  <p className="say">{n.text}</p>
+                  <p className="say">{n.role === 'tutor' ? renderMd(parseMd(n.text)) : n.text}</p>
                 )}
                 {!n.revealing && n.unlocked && n.unlocked.length > 0 && (
                   <p className="unlocked">
