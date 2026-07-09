@@ -1,6 +1,7 @@
 import { gateCheck } from './gate.js';
 import type { LLMClient } from './llm.js';
 import { teacherTurn } from './teacher.js';
+import { NullTracer, TracingLLMClient, type Tracer } from './trace.js';
 import type { GateVerdict, Message, ProblemCard, TutorMode } from './types.js';
 import { judgeUnlock } from './unlockJudge.js';
 
@@ -35,13 +36,21 @@ export class TutorSession {
   private readonly card: ProblemCard;
   private readonly client: LLMClient;
   private readonly models: SessionModels;
+  private readonly tracer: Tracer;
   private readonly _transcript: Message[] = [];
   private readonly _lockedTerms: string[];
+  private turnCounter = 0;
 
-  constructor(client: LLMClient, card: ProblemCard, models: SessionModels) {
-    this.client = client;
+  constructor(
+    client: LLMClient,
+    card: ProblemCard,
+    models: SessionModels,
+    tracer: Tracer = new NullTracer(),
+  ) {
+    this.client = new TracingLLMClient(client, tracer);
     this.card = card;
     this.models = models;
+    this.tracer = tracer;
     this._lockedTerms = [...card.leak_terms];
   }
 
@@ -54,6 +63,9 @@ export class TutorSession {
   }
 
   async submit(studentMessage: string): Promise<TurnResult> {
+    const turn = ++this.turnCounter;
+    const lockedBefore = [...this._lockedTerms];
+
     this._transcript.push({ role: 'student', content: studentMessage });
 
     let unlockedThisTurn: string[] = [];
@@ -96,6 +108,19 @@ export class TutorSession {
     }
 
     this._transcript.push({ role: 'teacher', content: t.reply });
+
+    await this.tracer.endTurn({
+      turn,
+      ts: new Date().toISOString(),
+      studentMsg: studentMessage,
+      lockedBefore,
+      lockedAfter: [...this._lockedTerms],
+      unlocked: unlockedThisTurn,
+      redrafted,
+      finalMode: t.mode,
+      finalReply: t.reply,
+      finalVerdict: verdict,
+    });
 
     return {
       mode: t.mode,

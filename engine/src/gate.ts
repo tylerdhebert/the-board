@@ -20,7 +20,7 @@ export async function gateCheck(
     draft,
   });
 
-  const parsed = await completeJson<GateVerdict>(client, { model, prompt });
+  const parsed = await completeJson<GateVerdict>(client, { model, prompt, label: 'gate' });
   if (parsed.verdict !== 'PASS' && parsed.verdict !== 'REVISE') {
     throw new Error(`Invalid gate verdict: ${JSON.stringify(parsed.verdict)}`);
   }

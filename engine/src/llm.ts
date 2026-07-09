@@ -4,7 +4,13 @@ import { readFile, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-export interface LLMRequest { model: string; prompt: string; outputSchemaPath?: string }
+export interface LLMRequest {
+  model: string;
+  prompt: string;
+  outputSchemaPath?: string;
+  /** e.g. 'teacher' | 'gate' | 'unlock' — used only for tracing. */
+  label?: string;
+}
 export interface LLMClient { complete(req: LLMRequest): Promise<string> }
 
 export class CodexCliClient implements LLMClient {

@@ -21,7 +21,7 @@ export async function judgeUnlock(
     student_msg: studentMsg,
   });
 
-  const parsed = await completeJson<UnlockResult>(client, { model, prompt });
+  const parsed = await completeJson<UnlockResult>(client, { model, prompt, label: 'unlock' });
   const lockedSet = new Set(lockedTerms);
   // Guard against off-schema model output (completeJson does not validate shape).
   const returned = Array.isArray(parsed.unlocked) ? parsed.unlocked : [];

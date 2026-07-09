@@ -4,3 +4,4 @@ dist/
 _*.ts
 _*.txt
 *.tmp
+logs/

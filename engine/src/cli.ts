@@ -1,10 +1,11 @@
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import * as readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import { CodexCliClient } from './llm.js';
 import { REPO_ROOT } from './paths.js';
 import { TutorSession } from './session.js';
+import { JsonlTracer } from './trace.js';
 import type { ProblemCard } from './types.js';
 
 const DIM = '\x1b[2m';
@@ -18,14 +19,21 @@ async function main(): Promise<void> {
   );
   const card = JSON.parse(await readFile(cardPath, 'utf-8')) as ProblemCard;
 
+  const logsDir = join(REPO_ROOT, 'logs');
+  await mkdir(logsDir, { recursive: true });
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const logPath = join(logsDir, `session-${timestamp}.jsonl`);
+  const tracer = new JsonlTracer(logPath);
+
   const client = new CodexCliClient();
   const session = new TutorSession(client, card, {
     teacher: 'gpt-5.5',
     gate: 'gpt-5.4-mini',
     unlock: 'gpt-5.4-mini',
-  });
+  }, tracer);
 
   console.log(`Tutoring: ${card.title}`);
+  console.log(`(logging to ${logPath})`);
 
   const rl = readline.createInterface({ input, output });
   try {

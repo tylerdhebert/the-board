@@ -40,7 +40,7 @@ export async function teacherTurn(
     gate_feedback,
   });
 
-  const raw = await client.complete({ model, prompt });
+  const raw = await client.complete({ model, prompt, label: 'teacher' });
 
   const lines = raw.split(/\r?\n/);
   let firstNonEmptyIdx = -1;
