@@ -9,3 +9,7 @@ logs/
 server/.lsp-scratch/
 server/.run-scratch/
 sessions/
+sessions.migrated/
+tutor.db
+tutor.db-wal
+tutor.db-shm

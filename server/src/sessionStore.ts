@@ -1,10 +1,14 @@
-import { mkdir, readdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { existsSync, readdirSync, readFileSync, renameSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { DatabaseSync } from 'node:sqlite';
 import type { Message, StudentRunResult } from './engine.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const sessionsDir = path.resolve(__dirname, '../../sessions');
+const repoRoot = path.resolve(__dirname, '../..');
+const dbPath = path.join(repoRoot, 'tutor.db');
+const sessionsDir = path.join(repoRoot, 'sessions');
+const migratedDir = path.join(repoRoot, 'sessions.migrated');
 
 export type PersistedNote = {
   role: 'student' | 'tutor';
@@ -28,55 +32,258 @@ export type PersistedSession = {
   engine: { transcript: Message[]; lockedTerms: string[]; turnCounter: number };
 };
 
-async function ensureDir(): Promise<void> {
-  await mkdir(sessionsDir, { recursive: true });
+type SessionRow = {
+  id: string;
+  card_name: string;
+  title: string;
+  started_at: string;
+  updated_at: string;
+  solved: number;
+  lang: string;
+  code: string;
+  last_run: string | null;
+  engine_transcript: string;
+  engine_locked_terms: string;
+  engine_turn_counter: number;
+};
+
+type NoteRow = {
+  session_id: string;
+  seq: number;
+  role: string;
+  text: string;
+  mode: string | null;
+  unlocked: string | null;
+  redrafted: number | null;
+};
+
+let db: DatabaseSync | null = null;
+
+function rowToSession(row: SessionRow, notes: PersistedNote[]): PersistedSession {
+  return {
+    id: row.id,
+    cardName: row.card_name,
+    title: row.title,
+    startedAt: row.started_at,
+    updatedAt: row.updated_at,
+    solved: row.solved !== 0,
+    lang: row.lang,
+    code: row.code,
+    notes,
+    lastRun: row.last_run ? (JSON.parse(row.last_run) as StudentRunResult) : null,
+    engine: {
+      transcript: JSON.parse(row.engine_transcript) as Message[],
+      lockedTerms: JSON.parse(row.engine_locked_terms) as string[],
+      turnCounter: row.engine_turn_counter,
+    },
+  };
+}
+
+function noteFromRow(row: NoteRow): PersistedNote {
+  const note: PersistedNote = {
+    role: row.role as PersistedNote['role'],
+    text: row.text,
+  };
+  if (row.mode != null) note.mode = row.mode;
+  if (row.unlocked != null) note.unlocked = JSON.parse(row.unlocked) as string[];
+  if (row.redrafted != null) note.redrafted = row.redrafted !== 0;
+  return note;
+}
+
+function loadNotes(database: DatabaseSync, sessionId: string): PersistedNote[] {
+  const rows = database
+    .prepare('SELECT * FROM notes WHERE session_id = ? ORDER BY seq ASC')
+    .all(sessionId) as NoteRow[];
+  return rows.map(noteFromRow);
+}
+
+function migrateFromJsonFiles(database: DatabaseSync): void {
+  if (!existsSync(sessionsDir)) return;
+  let entries: string[];
+  try {
+    entries = readdirSync(sessionsDir).filter(
+      (e) => e.endsWith('.json') && !e.endsWith('.json.tmp'),
+    );
+  } catch {
+    return;
+  }
+  if (entries.length === 0) return;
+
+  const existing = database.prepare('SELECT 1 FROM sessions WHERE id = ?');
+  const insertSession = database.prepare(`
+    INSERT INTO sessions (
+      id, card_name, title, started_at, updated_at, solved, lang, code,
+      last_run, engine_transcript, engine_locked_terms, engine_turn_counter
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const insertNote = database.prepare(`
+    INSERT INTO notes (session_id, seq, role, text, mode, unlocked, redrafted)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  let migrated = 0;
+  database.exec('BEGIN');
+  try {
+    for (const entry of entries) {
+      let s: PersistedSession;
+      try {
+        s = JSON.parse(readFileSync(path.join(sessionsDir, entry), 'utf8')) as PersistedSession;
+      } catch {
+        continue;
+      }
+      if (!s?.id || existing.get(s.id)) continue;
+
+      insertSession.run(
+        s.id,
+        s.cardName,
+        s.title,
+        s.startedAt,
+        s.updatedAt,
+        s.solved ? 1 : 0,
+        s.lang ?? '',
+        s.code ?? '',
+        s.lastRun == null ? null : JSON.stringify(s.lastRun),
+        JSON.stringify(s.engine?.transcript ?? []),
+        JSON.stringify(s.engine?.lockedTerms ?? []),
+        s.engine?.turnCounter ?? 0,
+      );
+      for (let i = 0; i < (s.notes?.length ?? 0); i++) {
+        const n = s.notes[i]!;
+        insertNote.run(
+          s.id,
+          i,
+          n.role,
+          n.text,
+          n.mode ?? null,
+          n.unlocked == null ? null : JSON.stringify(n.unlocked),
+          n.redrafted == null ? null : n.redrafted ? 1 : 0,
+        );
+      }
+      migrated++;
+    }
+    database.exec('COMMIT');
+  } catch (err) {
+    database.exec('ROLLBACK');
+    throw err;
+  }
+
+  renameSync(sessionsDir, migratedDir);
+  console.log(`migrated ${migrated} session(s) from sessions/ into tutor.db`);
+}
+
+function getDb(): DatabaseSync {
+  if (db) return db;
+  const database = new DatabaseSync(dbPath);
+  database.exec('PRAGMA journal_mode = WAL');
+  database.exec('PRAGMA foreign_keys = ON');
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS sessions (
+      id TEXT PRIMARY KEY,
+      card_name TEXT NOT NULL,
+      title TEXT NOT NULL,
+      started_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      solved INTEGER NOT NULL DEFAULT 0,
+      lang TEXT NOT NULL DEFAULT '',
+      code TEXT NOT NULL DEFAULT '',
+      last_run TEXT,
+      engine_transcript TEXT NOT NULL,
+      engine_locked_terms TEXT NOT NULL,
+      engine_turn_counter INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS notes (
+      session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+      seq INTEGER NOT NULL,
+      role TEXT NOT NULL,
+      text TEXT NOT NULL,
+      mode TEXT,
+      unlocked TEXT,
+      redrafted INTEGER,
+      PRIMARY KEY (session_id, seq)
+    );
+    CREATE INDEX IF NOT EXISTS idx_sessions_card ON sessions(card_name);
+  `);
+  migrateFromJsonFiles(database);
+  db = database;
+  return database;
 }
 
 export async function saveSession(s: PersistedSession): Promise<void> {
-  await ensureDir();
-  const dest = path.join(sessionsDir, `${s.id}.json`);
-  const tmp = `${dest}.tmp`;
-  await writeFile(tmp, JSON.stringify(s, null, 2) + '\n', 'utf8');
+  const database = getDb();
+  database.exec('BEGIN');
   try {
-    await rename(tmp, dest);
-  } catch (err) {
-    // Windows cannot rename over an existing file.
-    const code = (err as NodeJS.ErrnoException).code;
-    if (code === 'EEXIST' || code === 'EPERM' || code === 'EACCES') {
-      await unlink(dest);
-      await rename(tmp, dest);
-    } else {
-      throw err;
+    database
+      .prepare(
+        `
+      INSERT INTO sessions (
+        id, card_name, title, started_at, updated_at, solved, lang, code,
+        last_run, engine_transcript, engine_locked_terms, engine_turn_counter
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        card_name = excluded.card_name,
+        title = excluded.title,
+        started_at = excluded.started_at,
+        updated_at = excluded.updated_at,
+        solved = excluded.solved,
+        lang = excluded.lang,
+        code = excluded.code,
+        last_run = excluded.last_run,
+        engine_transcript = excluded.engine_transcript,
+        engine_locked_terms = excluded.engine_locked_terms,
+        engine_turn_counter = excluded.engine_turn_counter
+    `,
+      )
+      .run(
+        s.id,
+        s.cardName,
+        s.title,
+        s.startedAt,
+        s.updatedAt,
+        s.solved ? 1 : 0,
+        s.lang,
+        s.code,
+        s.lastRun == null ? null : JSON.stringify(s.lastRun),
+        JSON.stringify(s.engine.transcript),
+        JSON.stringify(s.engine.lockedTerms),
+        s.engine.turnCounter,
+      );
+
+    database.prepare('DELETE FROM notes WHERE session_id = ?').run(s.id);
+    const insertNote = database.prepare(`
+      INSERT INTO notes (session_id, seq, role, text, mode, unlocked, redrafted)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (let i = 0; i < s.notes.length; i++) {
+      const n = s.notes[i]!;
+      insertNote.run(
+        s.id,
+        i,
+        n.role,
+        n.text,
+        n.mode ?? null,
+        n.unlocked == null ? null : JSON.stringify(n.unlocked),
+        n.redrafted == null ? null : n.redrafted ? 1 : 0,
+      );
     }
+    database.exec('COMMIT');
+  } catch (err) {
+    database.exec('ROLLBACK');
+    throw err;
   }
 }
 
 export async function loadSession(id: string): Promise<PersistedSession | null> {
   if (id.includes('/') || id.includes('\\') || id.includes('..')) return null;
-  try {
-    const raw = await readFile(path.join(sessionsDir, `${id}.json`), 'utf8');
-    return JSON.parse(raw) as PersistedSession;
-  } catch {
-    return null;
-  }
+  const database = getDb();
+  const row = database.prepare('SELECT * FROM sessions WHERE id = ?').get(id) as
+    | SessionRow
+    | undefined;
+  if (!row) return null;
+  return rowToSession(row, loadNotes(database, id));
 }
 
 export async function listSessions(): Promise<PersistedSession[]> {
-  try {
-    await ensureDir();
-    const entries = await readdir(sessionsDir);
-    const out: PersistedSession[] = [];
-    for (const entry of entries) {
-      if (!entry.endsWith('.json') || entry.endsWith('.json.tmp')) continue;
-      try {
-        const raw = await readFile(path.join(sessionsDir, entry), 'utf8');
-        out.push(JSON.parse(raw) as PersistedSession);
-      } catch {
-        // skip corrupt files silently
-      }
-    }
-    return out;
-  } catch {
-    return [];
-  }
+  const database = getDb();
+  const rows = database.prepare('SELECT * FROM sessions').all() as SessionRow[];
+  return rows.map((row) => rowToSession(row, loadNotes(database, row.id)));
 }
