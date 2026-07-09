@@ -1,0 +1,72 @@
+{
+  "title": "Reverse Integer",
+  "statement": "Given a signed 32-bit integer x, return the integer formed by reversing its decimal digits. Preserve the sign. If the reversed value would be outside the signed 32-bit range [-2^31, 2^31 - 1], return 0. The solution must avoid storing a 64-bit intermediate value.",
+  "constraints": "x is in the signed 32-bit range: -2^31 <= x <= 2^31 - 1. Because 64-bit integers are unavailable, the algorithm must detect overflow before doing a multiply-by-10-and-add step that could exceed 32-bit bounds.",
+  "brute_force": {
+    "approach": "Convert x to a string, peel off a leading '-' if present, reverse the remaining characters, parse the result back to an integer with the original sign, then check whether it is inside the 32-bit signed range. This is simple and correct in languages where parsing the reversed string cannot overflow first, but it violates the spirit of the no-64-bit-intermediate constraint in many environments.",
+    "time": "O(d), where d is the number of decimal digits",
+    "space": "O(d) for the string representation"
+  },
+  "optimal": {
+    "approach": "Build the reversed value one digit at a time using arithmetic. Repeatedly remove the last digit from x and prepare to append it to the result. Before computing result * 10 + digit, compare result against the largest or smallest safe prefix so the operation is only performed when it is guaranteed to remain inside the signed 32-bit range.",
+    "language": "python",
+    "code": "def reverse_integer(x: int) -> int:\n    INT_MIN = -2**31\n    INT_MAX = 2**31 - 1\n\n    ans = 0\n\n    def trunc_toward_zero_div_10(n: int) -> int:\n        return n // 10 if n >= 0 else -((-n) // 10)\n\n    while x != 0:\n        q = trunc_toward_zero_div_10(x)\n        digit = x - q * 10\n        x = q\n\n        if ans > INT_MAX // 10 or (ans == INT_MAX // 10 and digit > 7):\n            return 0\n        if ans < trunc_toward_zero_div_10(INT_MIN) or (ans == trunc_toward_zero_div_10(INT_MIN) and digit < -8):\n            return 0\n\n        ans = ans * 10 + digit\n\n    return ans\n\n\n# Alias for runners that expect a shorter LeetCode-style name.\ndef reverse(x: int) -> int:\n    return reverse_integer(x)\n",
+    "time": "O(d), where d is the number of decimal digits",
+    "space": "O(1)"
+  },
+  "key_insight": "You can know whether appending the next digit would overflow by checking the current reversed prefix before multiplying it by 10.",
+  "ladder": [
+    "define digit reversal arithmetically",
+    "try string reversal or full numeric rebuild",
+    "notice the forbidden oversized intermediate",
+    "append one last digit at a time",
+    "find the last safe prefix before appending",
+    "handle positive and negative limits separately"
+  ],
+  "traps": [
+    {
+      "wrong_approach": "Reverse the whole number first and then check whether it is in range.",
+      "why_wrong": "The reversed value itself may overflow before the check in an environment limited to 32-bit integers.",
+      "counterexample": "x = 1534236469; the mathematical reverse is 9646324351, which is outside the 32-bit signed range."
+    },
+    {
+      "wrong_approach": "Use the same final-digit cutoff for both positive and negative overflow.",
+      "why_wrong": "The signed 32-bit range is asymmetric: the maximum ends in 7, while the minimum ends in -8 when building with signed digits.",
+      "counterexample": "x = -8463847412 is not a valid input, but during reversal-style reasoning the boundary value -2147483648 is valid while 2147483648 is not; treating both sides as ending at 7 rejects or accepts the wrong boundary."
+    },
+    {
+      "wrong_approach": "Strip the sign, reverse abs(x), then reapply the sign without thinking about the minimum integer.",
+      "why_wrong": "In many 32-bit languages, abs(-2147483648) cannot be represented as a positive 32-bit integer.",
+      "counterexample": "x = -2147483648; computing abs(x) overflows in a strict 32-bit signed environment."
+    },
+    {
+      "wrong_approach": "Forget that trailing zeroes disappear in the integer result.",
+      "why_wrong": "Reversal produces an integer, not a fixed-width digit string, so leading zeroes after reversal are not kept.",
+      "counterexample": "x = 120 should return 21, not 021 or 210."
+    }
+  ],
+  "leak_terms": [
+    "pre-overflow check",
+    "check before multiplying by 10",
+    "safe prefix before appending digit",
+    "INT_MAX divided by 10 threshold",
+    "INT_MIN divided by 10 threshold",
+    "pop and push digits",
+    "digit-by-digit arithmetic reversal"
+  ],
+  "underlying_primitive": "Reasoning about whether a small arithmetic update will cross a fixed numeric boundary before performing the update",
+  "examples": [
+    {
+      "input": "reverse_integer(123)",
+      "output": "321"
+    },
+    {
+      "input": "reverse_integer(-123)",
+      "output": "-321"
+    },
+    {
+      "input": "reverse_integer(1534236469)",
+      "output": "0"
+    }
+  ]
+}
