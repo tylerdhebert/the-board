@@ -70,6 +70,10 @@ restart 8787 to pick it up (tsx isn't in watch mode). Web changes hot-reload.
 - **Orphaned codex processes:** backgrounding multiple `codex exec` (e.g. via `&`
   under a `wait` that times out) leaves orphans that contend and make everything
   crawl. Kill with PowerShell `Get-Process | ? ProcessName -match codex | Stop-Process`.
+  The ENGINE's own CLI calls self-protect since `dc06fb3`: a codex stream once
+  stalled silently and hung /api/start forever, so `runCli` (llm.ts) has a 120s
+  inactivity watchdog (`TUTOR_CLI_INACTIVITY_MS` to override) that tree-kills
+  (`taskkill /T`) and errors; `verifyCard` caps reference-code runs at 30s.
 - **UTF-8:** codex demands UTF-8 stdin; set `PYTHONUTF8=1`, write files UTF-8.
   Don't use unquoted bash heredocs for JS/Playwright — `$(...)`/`$` get expanded.
 - **Answer key must NEVER reach the client** — server whitelists fields explicitly.
