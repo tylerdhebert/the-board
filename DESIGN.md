@@ -267,9 +267,30 @@ Design decided:
   That "arrival" signal likely wants to exist once and feed several consumers
   (ladder advance, easing off, UI "you're close"), not be leak-terms-only.
 
-### Next build steps
-1. Templatize the TEACHER prompt the same way (card slots) — gate is done.
-2. Build the unlock judge + wire deterministic `leak_terms` mutation into `drive.sh`.
-3. Live LeetCode fetch (GraphQL) to replace pasted statements at ingest.
-4. Pressure-test the DE-ESCALATION trigger on *borderline* students (least-proven
-   piece; the gate can't backstop an over-eager de-escalation).
+### Build status — DONE (headless engine, `engine/`, 2026-07-08)
+All of the below shipped as a TypeScript engine (Increments 1–5). A UI can sit
+on `TutorSession`. Implemented by Grok 4.5 under diff-level review.
+1. ✅ Templatized TEACHER prompt (card slots) — `prompts/teacher_tmpl.md`.
+2. ✅ Unlock judge + deterministic `leak_terms` mutation — `unlockJudge.ts` +
+   `session.ts` (prefilter → judge → mutate BEFORE the teacher turn).
+3. ✅ Live LeetCode fetch (GraphQL) — `leetcode.ts`; URL → statement → ingest.
+4. ✅ Pressure-tested the DE-ESCALATION trigger — results below.
+
+### DE-ESCALATION trigger — pressure-test results (engine, `probes/deescalation.ts`)
+The one safety-critical behavior the gate can't backstop. Ran three student
+personas through a real `TutorSession` on Two Sum:
+
+| Persona | Description | Modes per turn | Verdict |
+|---|---|---|---|
+| borderline | stuck-but-progressing (brute force → complexity → "keep track") | socratic ×6 (reproduced twice) | correctly did NOT de-escalate |
+| plateau | competent, circles on the insight, no giveup | socratic 1–3, **analog @4** | fires after ~3 stuck exchanges (per design) |
+| hopeless | never grasps the problem, gives up | socratic 1–4, **analog @5** | fires at the giveup |
+
+The trigger discriminates: it ignores mild stuckness while the student moves,
+and fires only on genuine plateau (~3 evidenced-stuck exchanges) or giveup —
+the intended threshold. It also selects the analog to fit WHERE the student is
+stuck (basic-search for the hopeless student; badge→seat KEYING for the plateau
+student, who only lacks the O(1)-lookup primitive). The gate's redraft also
+fired live during the plateau run (caught a leak mid-session). Caveat: n=1–2
+runs/persona with model non-determinism; the plateau de-escalation point may
+vary ±1 turn. `probes/deescalation.ts` is the kept regression harness.
