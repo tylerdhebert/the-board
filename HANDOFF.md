@@ -90,13 +90,23 @@ restart 8787 to pick it up (tsx isn't in watch mode). Web changes hot-reload.
    teacher draft still never leaves the server before the gate approves it.
    Implemented by Grok 4.5 via cursor-subagent; verified live end to end
    (unlock → draft → gate → REVISE → redraft → re-gate in one real turn).
-2. **C# language server** (NEXT; wants C# + TS as primary langs; Python later). Monaco
-   gives real IntelliSense for JS/TS free (bundled TS worker) but only word-based
-   completion for C#/others. Real C# IntelliSense = run a language server
-   (OmniSharp / Roslyn) and bridge via `monaco-languageclient` over WebSocket
-   (LSP). Meaningful backend work. NOTE: deliberately do NOT add AI/Copilot
-   autocomplete — it would complete the solution and defeat the product.
-3. **API-client backends** (`AnthropicClient`/`OpenAIClient` implementing
+2. ~~**C# language server**~~ SHIPPED 2026-07-09 (`9cde509`, spec
+   `.agent-tasks/csharp-lsp.md`). Deliberately NOT monaco-languageclient — a
+   slim hand-rolled client (user's explicit choice): `web/src/lsp/jsonrpc.ts` +
+   `csharpLsp.ts` (four Monaco providers), `server/src/lsp.ts` ws bridge
+   spawning `csharp-ls` against `server/.lsp-scratch/`. PREREQ + gotcha:
+   `dotnet tool install --global csharp-ls --version 0.20.0` — 0.21+ are
+   net10.0-only and fail on the local .NET 9 SDK with a misleading
+   "DotnetToolSettings.xml not found" error; bump only after moving to SDK 10.
+   Client subtleties that matter: didOpen empty → wait `$/progress` end →
+   didChange overlay; requests flush pending didChange first (stale-buffer
+   race, observed live). AI autocomplete stays banned.
+3. **Electron shell** (confirmed 2026-07-09 — the user always intended this to
+   be an Electron app; the intent predates the handoff docs and was lost, so it
+   is recorded here now). Packaging-only: main process boots the api server,
+   window loads the web build. The web/server split (answer-key boundary) and
+   the LSP-over-WebSocket bridge carry over unchanged.
+4. **API-client backends** (`AnthropicClient`/`OpenAIClient` implementing
    `LLMClient`) for when the user has API keys — faster + structured JSON output
    removes `completeJson`'s parse-guessing. No keys in env as of this session;
    user churns CLI subscriptions (codex/cursor/opencode), so CLI adapters matter.
