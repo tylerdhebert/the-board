@@ -115,10 +115,24 @@ restart 8787 to pick it up (tsx isn't in watch mode). Web changes hot-reload.
    throttling are disabled or capturePage throws UnknownVizError when the
    window is covered. Still open: packaging/installer (electron-builder) if
    ever wanted.
-4. **API-client backends** (`AnthropicClient`/`OpenAIClient` implementing
+4. ~~**Run my code**~~ SHIPPED 2026-07-09 (`b1438cf`, spec
+   `.agent-tasks/run-my-code.md`, chosen over persistence/ledger as the biggest
+   product hole). Run-the-examples button executes the student's buffer against
+   the card examples (python / ts / js / csharp; entry point detected from
+   their code, scaffold fallback) with pass/fail + got-vs-want under the
+   editor; review-my-work appends the latest run so the tutor targets the real
+   failing case. Cases come from a python-ast extraction of the card's
+   python-expression examples; csharp runs via a reflection harness in
+   `server/.run-scratch/csharp/` (first run compiles). In-place/void problems
+   fail comparison — accepted. Also hardened dev.mjs shutdown (waits for
+   taskkill trees; the 500ms exit orphaned the whole stack once).
+5. **API-client backends** (`AnthropicClient`/`OpenAIClient` implementing
    `LLMClient`) for when the user has API keys — faster + structured JSON output
    removes `completeJson`'s parse-guessing. No keys in env as of this session;
    user churns CLI subscriptions (codex/cursor/opencode), so CLI adapters matter.
+6. Ideas discussed 2026-07-09, not committed to: **session persistence**
+   (in-memory Map dies with the server — biggest fragility), a
+   **solved-problems ledger** (sense of progression).
 
 ## Recently shipped
 - **2026-07-09 (streaming session):** SSE stage streaming + typewriter reveal
