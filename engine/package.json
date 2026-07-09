@@ -1,0 +1,16 @@
+{
+  "name": "tutor-engine",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc",
+    "dev": "tsx"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "tsx": "^4.19",
+    "typescript": "^5.7"
+  }
+}

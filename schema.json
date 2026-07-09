@@ -1,0 +1,70 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["title", "statement", "constraints", "brute_force", "optimal", "key_insight", "ladder", "traps", "leak_terms", "underlying_primitive", "examples"],
+  "properties": {
+    "title": { "type": "string" },
+    "statement": { "type": "string", "description": "The problem statement in plain prose." },
+    "constraints": { "type": "string", "description": "Input sizes / value ranges that determine which complexities pass." },
+    "brute_force": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["approach", "time", "space"],
+      "properties": {
+        "approach": { "type": "string", "description": "Prose description of the naive correct solution." },
+        "time": { "type": "string" },
+        "space": { "type": "string" }
+      }
+    },
+    "optimal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["approach", "language", "code", "time", "space"],
+      "properties": {
+        "approach": { "type": "string", "description": "Prose description of the optimal solution." },
+        "language": { "type": "string", "description": "Language of the code field, e.g. python." },
+        "code": { "type": "string", "description": "A complete, runnable reference solution. Used for verification; the student NEVER sees this." },
+        "time": { "type": "string" },
+        "space": { "type": "string" }
+      }
+    },
+    "key_insight": { "type": "string", "description": "The single 'aha' that unlocks the optimal solution, stated plainly." },
+    "ladder": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "The problem-specific rungs from naive to optimal, as short phrases. A map for the teacher, not a script."
+    },
+    "traps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["wrong_approach", "why_wrong", "counterexample"],
+        "properties": {
+          "wrong_approach": { "type": "string" },
+          "why_wrong": { "type": "string" },
+          "counterexample": { "type": "string", "description": "A concrete input that exposes the flaw, if applicable." }
+        }
+      }
+    },
+    "leak_terms": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Terms/short phrases that would give away the KEY INSIGHT or the specific technique/data-structure. Specific destination-revealing words only (e.g. 'hash map', 'remember seen values for O(1) lookup'). NEVER generic programming vocabulary (e.g. 'array', 'loop', 'variable')."
+    },
+    "underlying_primitive": { "type": "string", "description": "The core CS concept the student must possess, phrased for picking an analogy if they lack it, e.g. 'O(1) membership/lookup by key'." },
+    "examples": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["input", "output"],
+        "properties": {
+          "input": { "type": "string", "description": "A call to the reference solution's entrypoint, e.g. 'two_sum([2,7,11,15], 9)'." },
+          "output": { "type": "string", "description": "The expected return value as a Python literal, e.g. '[0, 1]'." }
+        }
+      },
+      "description": "Worked examples used to VERIFY the reference code before the card is trusted."
+    }
+  }
+}
