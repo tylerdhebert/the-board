@@ -1,0 +1,72 @@
+{
+  "title": "Valid Parentheses",
+  "statement": "Given a string containing only bracket characters, decide whether every opening bracket is closed by the same kind of bracket, closures happen in the correct nested order, and no closing bracket appears without a matching opener.",
+  "constraints": "1 <= len(s) <= 10000. Characters are only one of '(', ')', '{', '}', '[' and ']'. An O(n^2) brute force can pass small inputs but the intended solution should be O(n).",
+  "brute_force": {
+    "approach": "Repeatedly delete any adjacent matched pair: '()', '[]', or '{}'. Each deletion resolves one innermost valid pair. Keep scanning/replacing until a full pass makes no change. The string is valid exactly when everything has been deleted.",
+    "time": "O(n^2), because each replacement pass may scan the whole string and can remove only a small number of pairs.",
+    "space": "O(n), because strings are recreated or an intermediate buffer is stored."
+  },
+  "optimal": {
+    "approach": "Scan left to right. Store each unresolved opening bracket. When a closing bracket appears, it must match the most recent unresolved opening bracket; otherwise the string is invalid. At the end, all openings must have been resolved.",
+    "language": "python",
+    "code": "def is_valid_parentheses(s: str) -> bool:\n    matching_open = {')': '(', ']': '[', '}': '{'}\n    openers = set(matching_open.values())\n    pending = []\n\n    for ch in s:\n        if ch in openers:\n            pending.append(ch)\n        else:\n            if not pending or pending[-1] != matching_open[ch]:\n                return False\n            pending.pop()\n\n    return len(pending) == 0\n\n\nif __name__ == \"__main__\":\n    examples = [\"()\", \"()[]{}\", \"(]\", \"([])\", \"([)]\"]\n    for example in examples:\n        print(example, is_valid_parentheses(example))",
+    "time": "O(n), one pass over the string with constant work per character.",
+    "space": "O(n), in the worst case all characters are opening brackets and must be stored."
+  },
+  "key_insight": "In a nested bracket string, the next closing bracket must match the most recent opening bracket that has not been closed yet.",
+  "ladder": [
+    "define valid nesting",
+    "try deleting innermost pairs",
+    "notice repeated rescanning",
+    "focus on unresolved openings",
+    "compare each close to the newest unresolved open",
+    "finish only when none remain"
+  ],
+  "traps": [
+    {
+      "wrong_approach": "Only count how many opens and closes of each type appear.",
+      "why_wrong": "Matching counts do not prove the brackets close in the right order.",
+      "counterexample": "s = '([)]' has one pair of each type but is invalid."
+    },
+    {
+      "wrong_approach": "Accept a close bracket if there is any earlier opener of the same type.",
+      "why_wrong": "The close must match the currently innermost unresolved opener, not just some opener somewhere before it.",
+      "counterexample": "s = '([)]': ')' matches the earlier '(' by type, but '[' is still inside it."
+    },
+    {
+      "wrong_approach": "Pop or remove an opener whenever a close bracket appears without first checking that one exists.",
+      "why_wrong": "A closing bracket can appear before any corresponding opener, which must be invalid immediately.",
+      "counterexample": "s = ')(' starts with a close bracket."
+    },
+    {
+      "wrong_approach": "Return true after every close bracket has matched, without checking for leftover open brackets.",
+      "why_wrong": "The scan can end while some openings are still waiting to be closed.",
+      "counterexample": "s = '(()' never closes the first '('."
+    }
+  ],
+  "leak_terms": [
+    "stack",
+    "last-in first-out",
+    "LIFO",
+    "most recent unmatched opener",
+    "top of stack",
+    "push open brackets and pop on matching closes",
+    "closing bracket must match the last opener"
+  ],
+  "underlying_primitive": "Tracking nested obligations where the most recently added unresolved item must be handled first.",
+  "examples": [
+    {
+      "input": "is_valid_parentheses('()')",
+      "output": "True"
+    },
+    {
+      "input": "is_valid_parentheses('([])')",
+      "output": "True"
+    },
+    {
+      "input": "is_valid_parentheses('([)]')",
+      "output": "False"
+    }
+  ]
+}
