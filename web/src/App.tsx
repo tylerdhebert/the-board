@@ -265,9 +265,14 @@ export default function App() {
     <div className="board">
       {/* chalk filter — displaces only the border layers, giving a hand-drawn edge */}
       <svg className="defs" aria-hidden="true" width="0" height="0" style={{ position: 'absolute' }}>
-        <filter id="chalk-rough" x="-3%" y="-3%" width="106%" height="106%">
-          <feTurbulence type="fractalNoise" baseFrequency="0.014 0.02" numOctaves="2" seed="7" result="n" />
-          <feDisplacementMap in="SourceGraphic" in2="n" scale="3.6" />
+        <filter id="chalk-rough" x="-6%" y="-12%" width="112%" height="124%">
+          {/* line wander: low-frequency displacement so long borders visibly drift */}
+          <feTurbulence type="fractalNoise" baseFrequency="0.011 0.017" numOctaves="3" seed="7" result="n" />
+          <feDisplacementMap in="SourceGraphic" in2="n" scale="7" result="d" />
+          {/* dry-chalk grain: high-frequency noise erodes the stroke's alpha */}
+          <feTurbulence type="fractalNoise" baseFrequency="0.4" numOctaves="2" seed="3" result="grain" />
+          <feColorMatrix in="grain" type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1.6 -0.2" result="mask" />
+          <feComposite in="d" in2="mask" operator="in" />
         </filter>
       </svg>
 

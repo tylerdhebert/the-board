@@ -66,7 +66,7 @@ body::before {
   content: '';
   position: absolute;
   inset: 0;
-  border: 1.5px solid var(--chalk-line);
+  border: 2px solid var(--chalk-line);
   filter: url(#chalk-rough);
   pointer-events: none;
 }
