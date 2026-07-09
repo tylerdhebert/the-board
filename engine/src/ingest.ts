@@ -78,10 +78,15 @@ export async function verifyCard(card: ProblemCard): Promise<VerificationResult>
 
   const script = buildVerifyScript(card);
 
-  const { stdout, stderr, code } = await new Promise<{
+  // The reference code is LLM-generated; a buggy solution can loop forever.
+  // Cap the run so a bad card fails verification instead of hanging ingest.
+  const VERIFY_TIMEOUT_MS = 30_000;
+
+  const { stdout, stderr, code, timedOut } = await new Promise<{
     stdout: string;
     stderr: string;
     code: number | null;
+    timedOut: boolean;
   }>((resolve, reject) => {
     const child = spawn('python', ['-'], {
       env: { ...process.env, PYTHONUTF8: '1' },
@@ -89,6 +94,11 @@ export async function verifyCard(card: ProblemCard): Promise<VerificationResult>
 
     const stdoutChunks: Buffer[] = [];
     const stderrChunks: Buffer[] = [];
+    let killed = false;
+    const timer = setTimeout(() => {
+      killed = true;
+      child.kill();
+    }, VERIFY_TIMEOUT_MS);
 
     child.stdout.on('data', (chunk: Buffer) => {
       stdoutChunks.push(chunk);
@@ -96,18 +106,32 @@ export async function verifyCard(card: ProblemCard): Promise<VerificationResult>
     child.stderr.on('data', (chunk: Buffer) => {
       stderrChunks.push(chunk);
     });
-    child.on('error', reject);
+    child.on('error', (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
     child.on('close', (exitCode) => {
+      clearTimeout(timer);
       resolve({
         stdout: Buffer.concat(stdoutChunks).toString('utf-8'),
         stderr: Buffer.concat(stderrChunks).toString('utf-8'),
         code: exitCode,
+        timedOut: killed,
       });
     });
 
+    child.stdin.on('error', () => {}); // child may die before stdin flushes
     child.stdin.write(script, 'utf-8');
     child.stdin.end();
   });
+
+  if (timedOut) {
+    return {
+      ok: false,
+      cases: [],
+      error: `reference code did not finish within ${VERIFY_TIMEOUT_MS / 1000}s (infinite loop?)`,
+    };
+  }
 
   if (code !== 0) {
     return {
