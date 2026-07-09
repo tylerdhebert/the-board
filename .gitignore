@@ -5,3 +5,4 @@ _*.ts
 _*.txt
 *.tmp
 logs/
+server/.lsp-scratch/

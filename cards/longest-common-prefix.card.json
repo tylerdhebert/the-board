@@ -1,0 +1,70 @@
+{
+  "title": "Longest Common Prefix",
+  "statement": "Given a non-empty list of lowercase strings, return the longest string that appears at the start of every string in the list. If they share no starting characters, return an empty string.",
+  "constraints": "1 <= len(strs) <= 200; 0 <= len(strs[i]) <= 200; each non-empty string contains only lowercase English letters. These bounds allow simple O(n*m) scans, where n is the number of strings and m is the shortest or first string length.",
+  "brute_force": {
+    "approach": "Use the first string as the source of possible answers. Try its prefixes from longest to shortest, and for each candidate prefix, check whether every string starts with it. The first candidate that passes is the answer; if none pass, return the empty string.",
+    "time": "O(n*m^2) in the worst case, where n is the number of strings and m is the length of the first string, because many candidate prefixes may be checked against many strings.",
+    "space": "O(m) for the candidate prefix, ignoring the output."
+  },
+  "optimal": {
+    "approach": "Scan character positions from left to right. At each position, use the character from the first string as the expected character. If any string is too short or has a different character there, everything before that position is the answer. If all checked positions match, the entire first string is common.",
+    "language": "python",
+    "code": "def longest_common_prefix(strs):\n    \"\"\"Return the longest common prefix among a non-empty list of strings.\"\"\"\n    if not strs:\n        return \"\"\n\n    first = strs[0]\n    for i, ch in enumerate(first):\n        for s in strs[1:]:\n            if i == len(s) or s[i] != ch:\n                return first[:i]\n    return first\n\n\nexamples = [\n    (([\"flower\", \"flow\", \"flight\"],), \"fl\"),\n    (([\"dog\", \"racecar\", \"car\"],), \"\"),\n    (([\"\", \"abc\"],), \"\"),\n]\n\nif __name__ == \"__main__\":\n    for args, expected in examples:\n        actual = longest_common_prefix(*args)\n        assert actual == expected, f\"expected {expected!r}, got {actual!r}\"\n    print(\"ok\")",
+    "time": "O(n*m), where m is the length of the first string, because each position is checked across the strings until the first mismatch or end.",
+    "space": "O(1) auxiliary space, ignoring the returned prefix slice."
+  },
+  "key_insight": "The prefix only survives one character at a time: as soon as any string ends or disagrees at the current position, the answer is exactly what came before that position.",
+  "ladder": [
+    "define what prefix means",
+    "try candidate prefixes",
+    "notice repeated rechecking",
+    "compare one position across all strings",
+    "stop at first end or mismatch",
+    "slice before the failing position"
+  ],
+  "traps": [
+    {
+      "wrong_approach": "Only compare the first two strings and return their common prefix.",
+      "why_wrong": "A later string can shorten or completely eliminate the prefix.",
+      "counterexample": "strs = [\"flower\", \"flow\", \"flight\"] exposes this: the first two share \"flow\", but all three only share \"fl\"."
+    },
+    {
+      "wrong_approach": "Keep scanning a position without checking whether each string is long enough.",
+      "why_wrong": "A shorter string can be the limiting factor, and indexing past its end causes an error or an incorrect prefix.",
+      "counterexample": "strs = [\"abc\", \"ab\"] should return \"ab\", not crash or return \"abc\"."
+    },
+    {
+      "wrong_approach": "Treat matching characters anywhere in the strings as enough.",
+      "why_wrong": "The characters must match from the beginning with no gaps; common letters later do not count as a prefix.",
+      "counterexample": "strs = [\"dog\", \"racecar\", \"car\"] share some letters across the words, but the common prefix is \"\"."
+    },
+    {
+      "wrong_approach": "Assume every string is non-empty.",
+      "why_wrong": "The constraints allow empty strings, and any list containing an empty string has only the empty common prefix.",
+      "counterexample": "strs = [\"\", \"abc\"] should return \"\"."
+    }
+  ],
+  "leak_terms": [
+    "vertical scanning",
+    "column-wise comparison",
+    "compare characters at the same position across all strings",
+    "stop at the first mismatch or string end",
+    "the answer is everything before the first failing position"
+  ],
+  "underlying_primitive": "Checking whether every item in a collection agrees on the same position before moving to the next position.",
+  "examples": [
+    {
+      "input": "longest_common_prefix([\"flower\", \"flow\", \"flight\"])",
+      "output": "\"fl\""
+    },
+    {
+      "input": "longest_common_prefix([\"dog\", \"racecar\", \"car\"])",
+      "output": "\"\""
+    },
+    {
+      "input": "longest_common_prefix([\"\", \"abc\"])",
+      "output": "\"\""
+    }
+  ]
+}

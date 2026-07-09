@@ -10,6 +10,7 @@ import {
   loadSnippets,
   studentSafeProblem,
 } from './engine.js';
+import { attachLspBridge, lspInfo } from './lsp.js';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const sessions = new Map<string, TutorSession>();
@@ -60,6 +61,11 @@ async function handle(
 
   if (method === 'GET' && pathname === '/api/cards') {
     sendJson(res, 200, await listCards());
+    return;
+  }
+
+  if (method === 'GET' && pathname === '/api/lsp/info') {
+    sendJson(res, 200, lspInfo());
     return;
   }
 
@@ -162,6 +168,8 @@ const server = http.createServer((req, res) => {
     }
   });
 });
+
+attachLspBridge(server);
 
 server.listen(PORT, () => {
   console.log(`tutor server on http://localhost:${PORT}`);
