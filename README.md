@@ -15,47 +15,47 @@ architecture and the validation findings.
 
 | Path | What |
 |------|------|
-| `DESIGN.md` | Architecture, the MODE dial, de-escalation, leak-terms unlock, all validation findings. |
-| `engine/` | The headless TypeScript engine (below the eventual UI). |
+| `web/` | The **"The Board"** React UI (Vite) — chalkboard identity, Monaco editor, tutor-in-the-margin. |
+| `server/` | Thin zero-dep Node API over the engine. Holds the answer key server-side; sends only student-safe data. |
+| `engine/` | The headless TypeScript engine (the tutor loop). |
 | `prompts/` | Teacher / gate / ingest prompt templates. |
 | `schema.json` | JSON Schema for a per-problem "problem card". |
-| `cards/` | Generated, code-verified problem cards (two_sum, container_water, house_robber). |
-| `prototype/` | The original bash validation harness (`drive.sh`) + transcripts that proved the concept. |
+| `cards/` | Code-verified problem cards (seeds + on-the-fly ingest cache). |
+| `prototype/` | The original bash validation harness + transcripts that proved the concept. |
 
-## Status
+## Status — working end to end (engine ← server ← web)
 
-Concept validated end-to-end as a prompt-only prototype (see `prototype/`).
-**The headless engine is complete** — a UI can now sit on top of `TutorSession`.
-Proven end to end: a LeetCode URL → fetched statement → generated + code-verified
-card → a live tutoring loop (teacher → gate → redraft) with deterministic
-leak-term unlocking. Build increments are specced in `.agent-tasks/`.
+Give it a problem **name or LeetCode link** → the server fetches + ingests +
+code-verifies a card on the fly → you chat with the tutor and write code in a
+Monaco editor; "review my work" critiques your buffer without ever finishing it.
+The answer key never leaves the server.
 
-- ✅ Increment 1 — foundation (`types`, `LLMClient` + codex-backed dev client)
-- ✅ Increment 2 — ingest (statement → card, verified by executing the reference)
-- ✅ Increment 3 — roles (templated teacher / gate / unlock judge)
-- ✅ Increment 4 — session orchestrator (`TutorSession`) + headless CLI
-- ✅ Increment 5 — live LeetCode fetch (URL → statement)
+- ✅ Engine (Increments 1–7): ingest, teacher/gate/unlock roles, session
+  orchestrator, LeetCode fetch, per-turn JSONL trace, per-role backend selection.
+- ✅ Server: `GET /api/cards`, `POST /api/session {cardName}`,
+  `POST /api/session/:id/submit`, `POST /api/start {query}` (name/link → ingest).
+- ✅ Web: "The Board" — chalk aesthetic, problem-by-name/link, Monaco + review.
 
-### Run the tutor (headless)
-```
-cd engine && npm install
-npm run cli                       # tutors the Two Sum card
-npx tsx src/cli.ts ../cards/house_robber.card.json
-```
-
-### Next: the UI
-The engine exposes everything a UI needs: `fetchProblem(url)` → `ingest()` →
-`new TutorSession(client, card, models)` → `session.submit(studentMessage)`
-returning `{ mode, reply, gate, redrafted, unlockedThisTurn }`. Swap the
-codex-backed `LLMClient` for a real API client in production.
-
-## Engine dev
+## Run the app
 
 ```
-cd engine
-npm install
-npm run typecheck
+# terminal 1 — API (needs codex/claude CLI on PATH)
+cd server && npm install && PORT=8787 npx tsx src/server.ts
+# terminal 2 — web
+cd web && npm install && npx vite      # open the printed localhost URL
 ```
 
-Requires the `codex` CLI on PATH (the dev `LLMClient` shells out to it; swap in a
-real API client for production).
+Then type a problem name (`two sum`) or paste a LeetCode link and hit **to the
+board**. First-time novel problems take ~30–60s to fetch + ingest; after that
+they're cached in `cards/`.
+
+## Headless CLI (no browser)
+```
+cd engine && npm install && npm run cli
+```
+
+## Notes
+- Backends: each role (teacher/gate/unlock) can run on a different backend
+  (`codex`, `claude`, …) via `SessionModels` — swap when a subscription lapses.
+- Every session writes a full JSONL trace to `logs/` (prompts, verdicts,
+  unlocks, latencies, backend per call) for prompt tuning.
