@@ -10,6 +10,7 @@ import {
   type Problem,
   type TurnStage,
 } from './api'
+import WindowControls from './WindowControls'
 
 const LANGS = ['csharp', 'typescript', 'python', 'javascript', 'java', 'cpp', 'go'] as const
 
@@ -267,8 +268,10 @@ export default function App() {
     if (e.key === 'Enter') void loadProblem()
   }
 
+  const inDesktop = typeof window !== 'undefined' && Boolean(window.tutorDesktop)
+
   return (
-    <div className="board">
+    <div className={inDesktop ? 'board in-desktop' : 'board'}>
       {/* chalk filter — displaces only the border layers, giving a hand-drawn edge */}
       <svg className="defs" aria-hidden="true" width="0" height="0" style={{ position: 'absolute' }}>
         <filter id="chalk-rough" x="-6%" y="-12%" width="112%" height="124%">
@@ -300,6 +303,7 @@ export default function App() {
             {loading ? 'chalking…' : 'to the board'}
           </button>
         </div>
+        <WindowControls />
       </header>
 
       {error && <div className="banner">{error}</div>}

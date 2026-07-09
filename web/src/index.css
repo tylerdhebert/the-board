@@ -144,6 +144,32 @@ body::before {
 .loader button:hover { background: #ffd76a; }
 .loader button:disabled { background: var(--chalk-faint); color: var(--slate); cursor: default; transform: none; }
 
+/* ---- desktop shell: strip is the titlebar ---- */
+.in-desktop .strip { -webkit-app-region: drag; }
+.in-desktop .strip input,
+.in-desktop .strip button { -webkit-app-region: no-drag; }
+
+.winctl {
+  display: flex;
+  align-items: stretch;
+  align-self: stretch;
+  margin: -14px -22px -16px 0;
+  flex-shrink: 0;
+}
+.winctl button {
+  width: 44px;
+  border: 0;
+  background: transparent;
+  color: var(--chalk-dim);
+  font-family: var(--mono);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+.winctl button:hover { color: var(--chalk); }
+.winctl button.close:hover { color: var(--coral); }
+
 /* ---- main stage ---- */
 .stage {
   display: grid;

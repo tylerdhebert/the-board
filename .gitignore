@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .codex-subagents/
+.shots/
 _*.ts
 _*.txt
 *.tmp
