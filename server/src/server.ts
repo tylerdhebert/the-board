@@ -4,6 +4,7 @@ import { URL } from 'node:url';
 import {
   DEFAULT_MODELS,
   TutorSession,
+  getOrIngestCard,
   listCards,
   loadCard,
   studentSafeProblem,
@@ -79,6 +80,29 @@ async function handle(
         return;
       }
       throw err;
+    }
+    return;
+  }
+
+  if (method === 'POST' && pathname === '/api/start') {
+    const body = (await readJsonBody(req)) as { query?: string };
+    const query = body.query;
+    if (typeof query !== 'string' || !query.trim()) {
+      sendJson(res, 400, { error: 'query is required' });
+      return;
+    }
+    try {
+      const { card, cached } = await getOrIngestCard(query);
+      const sessionId = randomUUID();
+      sessions.set(sessionId, new TutorSession(card, DEFAULT_MODELS));
+      sendJson(res, 200, {
+        sessionId,
+        problem: studentSafeProblem(card),
+        cached,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      sendJson(res, 502, { error: message });
     }
     return;
   }

@@ -1,11 +1,15 @@
-import { readFile, readdir } from 'node:fs/promises';
+import { access, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  CodexCliClient,
   TutorSession,
+  fetchProblem,
+  slugFromUrl,
   type ProblemCard,
   type SessionModels,
 } from '../../engine/src/index.js';
+import { ingest } from '../../engine/src/ingest.js';
 
 export { TutorSession };
 export type { ProblemCard, SessionModels };
@@ -36,6 +40,53 @@ function assertSafeCardName(name: string): void {
   if (name.includes('/') || name.includes('\\') || name.includes('..')) {
     throw new Error('invalid card name');
   }
+}
+
+export function toSlug(query: string): string {
+  const trimmed = query.trim();
+  if (
+    trimmed.includes('leetcode.com') ||
+    trimmed.includes('/problems/') ||
+    trimmed.startsWith('http')
+  ) {
+    return slugFromUrl(trimmed);
+  }
+  return trimmed
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+export async function getOrIngestCard(
+  query: string,
+  model = 'gpt-5.5',
+): Promise<{ card: ProblemCard; verified: boolean; cached: boolean }> {
+  const slug = toSlug(query);
+  assertSafeCardName(slug);
+  const cachePath = path.join(cardsDir, `${slug}.card.json`);
+
+  try {
+    await access(cachePath);
+    const raw = await readFile(cachePath, 'utf8');
+    const card = JSON.parse(raw) as ProblemCard;
+    return { card, verified: true, cached: true };
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code !== 'ENOENT') throw err;
+  }
+
+  let problem;
+  try {
+    problem = await fetchProblem(slug);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`failed to fetch problem "${slug}": ${message}`);
+  }
+
+  const client = new CodexCliClient();
+  const { card, verification } = await ingest(client, problem.statement, model);
+  await writeFile(cachePath, JSON.stringify(card, null, 2) + '\n', 'utf8');
+  return { card, verified: verification.ok, cached: false };
 }
 
 export async function loadCard(name: string): Promise<ProblemCard> {

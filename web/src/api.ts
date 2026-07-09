@@ -52,3 +52,14 @@ export async function submitTurn(
     body: JSON.stringify({ message }),
   })
 }
+
+// New flow: hand the tutor a problem name or a LeetCode link; the server fetches
+// + ingests it on the fly (slow on a cache miss).
+export async function startSession(
+  query: string,
+): Promise<{ sessionId: string; problem: Problem; cached?: boolean }> {
+  return request<{ sessionId: string; problem: Problem; cached?: boolean }>(
+    '/api/start',
+    { method: 'POST', body: JSON.stringify({ query }) },
+  )
+}

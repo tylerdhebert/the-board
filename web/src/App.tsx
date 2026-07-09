@@ -1,226 +1,269 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import CodeEditor from './CodeEditor'
 import {
   createSession,
   getCards,
+  startSession,
   submitTurn,
   type CardRef,
   type Problem,
 } from './api'
 
-type Message = {
+const LANGS = ['python', 'javascript', 'typescript', 'java', 'cpp', 'go'] as const
+
+type Mode = 'socratic' | 'analog' | 'scaffold'
+type Note = {
   role: 'student' | 'tutor'
   text: string
-  mode?: 'socratic' | 'analog' | 'scaffold'
+  mode?: Mode
   unlocked?: string[]
   redrafted?: boolean
 }
 
-function App() {
+function reviewPrompt(code: string): string {
+  return (
+    "Here's my current code. Review it and push me one step forward — point out " +
+    'what to reconsider, but do NOT give me the answer or write the fix:\n\n' +
+    code
+  )
+}
+
+export default function App() {
   const [cards, setCards] = useState<CardRef[]>([])
+  const [query, setQuery] = useState('')
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [problem, setProblem] = useState<Problem | null>(null)
-  const [messages, setMessages] = useState<Message[]>([])
+  const [notes, setNotes] = useState<Note[]>([])
   const [input, setInput] = useState('')
+  const [code, setCode] = useState('')
+  const [lang, setLang] = useState<string>('python')
   const [busy, setBusy] = useState(false)
-  const [loadError, setLoadError] = useState<string | null>(null)
-  const [selectedName, setSelectedName] = useState('')
-  const listRef = useRef<HTMLDivElement>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const notesRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    let cancelled = false
-    getCards()
-      .then((list) => {
-        if (!cancelled) {
-          setCards(list)
-          setLoadError(null)
-        }
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) {
-          setLoadError(err instanceof Error ? err.message : String(err))
-        }
-      })
-    return () => {
-      cancelled = true
-    }
+    getCards().then(setCards).catch(() => {})
   }, [])
 
   useEffect(() => {
-    const el = listRef.current
+    const el = notesRef.current
     if (el) el.scrollTop = el.scrollHeight
-  }, [messages, busy])
+  }, [notes, busy])
 
-  async function pickProblem(name: string) {
-    if (!name || busy) return
-    setSelectedName(name)
-    setBusy(true)
-    setLoadError(null)
+  async function loadProblem() {
+    const q = query.trim()
+    if (!q || loading) return
+    setLoading(true)
+    setError(null)
     try {
-      const { sessionId: id, problem: next } = await createSession(name)
-      setSessionId(id)
-      setProblem(next)
-      setMessages([])
+      const match = cards.find(
+        (c) => c.title.toLowerCase() === q.toLowerCase() || c.name === q.toLowerCase(),
+      )
+      const res = match ? await createSession(match.name) : await startSession(q)
+      setSessionId(res.sessionId)
+      setProblem(res.problem)
+      setNotes([])
       setInput('')
-    } catch (err: unknown) {
-      setLoadError(err instanceof Error ? err.message : String(err))
+      setCode('')
+    } catch (err) {
+      setError(
+        (err instanceof Error ? err.message : String(err)) +
+          " — if it's not a built-in problem, the server needs the on-the-fly ingest (restart it).",
+      )
     } finally {
-      setBusy(false)
+      setLoading(false)
     }
   }
 
-  async function send() {
-    const text = input.trim()
-    if (!text || !sessionId || busy) return
-
-    setInput('')
-    setMessages((prev) => [...prev, { role: 'student', text }])
+  async function turn(sendText: string, displayText?: string) {
+    if (!sessionId || busy) return
+    setNotes((p) => [...p, { role: 'student', text: displayText ?? sendText }])
     setBusy(true)
     try {
-      const result = await submitTurn(sessionId, text)
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'tutor',
-          text: result.reply,
-          mode: result.mode,
-          unlocked: result.unlockedThisTurn,
-          redrafted: result.redrafted,
-        },
+      const r = await submitTurn(sessionId, sendText)
+      setNotes((p) => [
+        ...p,
+        { role: 'tutor', text: r.reply, mode: r.mode, unlocked: r.unlockedThisTurn, redrafted: r.redrafted },
       ])
-    } catch (err: unknown) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'tutor',
-          text: err instanceof Error ? err.message : String(err),
-        },
-      ])
+    } catch (err) {
+      setNotes((p) => [...p, { role: 'tutor', text: err instanceof Error ? err.message : String(err) }])
     } finally {
       setBusy(false)
     }
   }
 
-  function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
+  function send() {
+    const t = input.trim()
+    if (!t) return
+    setInput('')
+    void turn(t)
+  }
+
+  function review() {
+    const c = code.trim()
+    if (!c || busy) return
+    void turn(reviewPrompt(c), '↳ review my work')
+  }
+
+  function onKey(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      void send()
+      send()
     }
+  }
+  function onLoaderKey(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter') void loadProblem()
   }
 
   return (
-    <div className="app">
-      <header className="topbar">
-        <div className="brand">
-          <span className="brand-mark">Σ</span>
-          <span className="brand-name">Socratic Tutor</span>
+    <div className="board">
+      {/* chalk filter — displaces only the border layers, giving a hand-drawn edge */}
+      <svg className="defs" aria-hidden="true" width="0" height="0" style={{ position: 'absolute' }}>
+        <filter id="chalk-rough" x="-3%" y="-3%" width="106%" height="106%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.014 0.02" numOctaves="2" seed="7" result="n" />
+          <feDisplacementMap in="SourceGraphic" in2="n" scale="3.6" />
+        </filter>
+      </svg>
+
+      <header className="strip">
+        <div className="wordmark">
+          <span className="sigma">Σ</span>
+          <b>The Board</b>
+          <span className="tail">// answers stay on my side</span>
         </div>
-        <label className="picker">
-          <span className="picker-label">Problem</span>
-          <select
-            value={selectedName}
-            disabled={busy || cards.length === 0}
-            onChange={(e) => void pickProblem(e.target.value)}
-          >
-            <option value="" disabled>
-              {cards.length === 0 ? 'Loading…' : 'Choose a problem'}
-            </option>
-            {cards.map((card) => (
-              <option key={card.name} value={card.name}>
-                {card.title}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="loader">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={onLoaderKey}
+            placeholder="a problem name or a leetcode link…"
+            spellCheck={false}
+          />
+          <button type="button" onClick={() => void loadProblem()} disabled={loading || !query.trim()}>
+            {loading ? 'chalking…' : 'to the board'}
+          </button>
+        </div>
       </header>
 
-      {loadError && <div className="banner">{loadError}</div>}
+      {error && <div className="banner">{error}</div>}
 
-      <div className="workspace">
-        <main className="problem-panel">
+      <div className="stage">
+        <main className="desk">
           {problem ? (
-            <article className="problem">
-              <h1>{problem.title}</h1>
-              <section>
-                <h2>Statement</h2>
-                <p className="prose">{problem.statement}</p>
+            <>
+              <article className="problem">
+                <p className="eyebrow">the problem</p>
+                <h1>{problem.title}</h1>
+                <h2>statement</h2>
+                <p className="statement">{problem.statement}</p>
+                <h2>constraints</h2>
+                <p className="constraints">{problem.constraints}</p>
+              </article>
+              <section className="workarea">
+                <div className="worklabel">
+                  <span>your work</span>
+                  <select className="langpick" value={lang} onChange={(e) => setLang(e.target.value)}>
+                    {LANGS.map((l) => (
+                      <option key={l} value={l}>
+                        {l}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="editor-shell chalk lit">
+                  <div className="monaco-host">
+                    <CodeEditor value={code} onChange={setCode} language={lang} />
+                  </div>
+                </div>
               </section>
-              <section>
-                <h2>Constraints</h2>
-                <p className="prose constraints">{problem.constraints}</p>
-              </section>
-            </article>
+            </>
           ) : (
-            <div className="empty-problem">
-              <p>Select a problem to begin.</p>
-              <p className="hint">
-                The tutor will guide you with questions — not answers.
+            <div className="hero">
+              <p className="kicker">socratic coding tutor</p>
+              <h1>
+                I won't tell you<br />
+                the answer. I'll get<br />
+                you to <em>see it</em>.
+              </h1>
+              <p>
+                Hand me a problem — by name or a LeetCode link — and we'll work it out
+                together. I ask the questions; you do the thinking.
+              </p>
+              <p className="how">
+                try: <span>two sum</span> &nbsp;·&nbsp; <span>house robber</span> &nbsp;·&nbsp;{' '}
+                <span>container with most water</span>
               </p>
             </div>
           )}
         </main>
 
-        <aside className="chat-rail">
-          <div className="chat-header">Tutor</div>
-          <div className="messages" ref={listRef}>
+        <aside className="margin">
+          <div className="margin-head">
+            <span className="m1">the tutor</span>
+            <span className="m2">in the margin</span>
+          </div>
+
+          <div className="notes" ref={notesRef}>
             {!sessionId && (
-              <p className="chat-placeholder">
-                Pick a problem to start a conversation.
+              <p className="note-empty">
+                Load a problem and I'll meet you here. Tell me where you're stuck, or take a
+                first swing at it in your work area.
               </p>
             )}
-            {sessionId && messages.length === 0 && !busy && (
-              <p className="chat-placeholder">
-                Ask a question or share what you notice about the problem.
+            {sessionId && notes.length === 0 && !busy && (
+              <p className="note-empty">
+                What's your first instinct? Even a brute-force idea is a good start.
               </p>
             )}
-            {messages.map((msg, i) => (
-              <div key={i} className={`bubble ${msg.role}`}>
-                <div className="bubble-meta">
-                  <span className="role">{msg.role}</span>
-                  {msg.mode && <span className={`mode mode-${msg.mode}`}>{msg.mode}</span>}
-                  {msg.redrafted && <span className="redrafted">revised</span>}
+            {notes.map((n, i) => (
+              <div key={i} className={`note ${n.role === 'tutor' ? 'tutor' : 'you'}`}>
+                <div className="who">
+                  <span>{n.role === 'tutor' ? 'tutor' : 'you'}</span>
+                  {n.mode && <span className={`badge ${n.mode}`}>{n.mode}</span>}
+                  {n.redrafted && <span className="badge revised">reworded</span>}
                 </div>
-                <p className="bubble-text">{msg.text}</p>
-                {msg.unlocked && msg.unlocked.length > 0 && (
-                  <p className="unlocked">✓ unlocked: {msg.unlocked.join(', ')}</p>
+                <p className="say">{n.text}</p>
+                {n.unlocked && n.unlocked.length > 0 && (
+                  <p className="unlocked">
+                    <b>✓ you've got it:</b> {n.unlocked.join(' · ')}
+                  </p>
                 )}
               </div>
             ))}
             {busy && sessionId && (
               <div className="thinking" aria-live="polite">
-                <span className="thinking-dots" aria-hidden="true">
-                  <span />
-                  <span />
-                  <span />
-                </span>
-                tutor is thinking…
+                <span className="dot" />
+                <span className="dot" />
+                <span className="dot" />
+                thinking about your move…
               </div>
             )}
           </div>
+
           <div className="composer">
-            <textarea
-              rows={3}
-              value={input}
-              disabled={!sessionId || busy}
-              placeholder={
-                sessionId
-                  ? 'Write to the tutor… (Enter to send)'
-                  : 'Select a problem first'
-              }
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={onKeyDown}
-            />
-            <button
-              type="button"
-              disabled={!sessionId || busy || !input.trim()}
-              onClick={() => void send()}
-            >
-              Send
-            </button>
+            {sessionId && (
+              <button className="review chalk amber" type="button" onClick={review} disabled={busy || !code.trim()}>
+                ✎ review my work
+              </button>
+            )}
+            <div className="row">
+              <textarea
+                rows={2}
+                value={input}
+                disabled={!sessionId || busy}
+                placeholder={sessionId ? 'say what you’re thinking…' : 'load a problem first'}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={onKey}
+              />
+              <button className="send" type="button" onClick={send} disabled={!sessionId || busy || !input.trim()}>
+                Send
+              </button>
+            </div>
           </div>
+          <p className="smudge">the tutor knows the solution. it will not be handing it over.</p>
         </aside>
       </div>
     </div>
   )
 }
-
-export default App

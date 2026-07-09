@@ -1,0 +1,72 @@
+{
+  "title": "Two Sum",
+  "statement": "Given a list of integers nums and an integer target, return the indices of the two distinct elements whose values add up to target. Exactly one valid answer exists, and the two indices may be returned in either order.",
+  "constraints": "2 <= len(nums) <= 10^4; -10^9 <= nums[i] <= 10^9; -10^9 <= target <= 10^9; exactly one valid answer exists. O(n^2) may be too slow at the upper bound; O(n) is intended.",
+  "brute_force": {
+    "approach": "Try every pair of positions i and j with i < j, check whether nums[i] + nums[j] equals target, and return the first matching pair. This is simple and correct because it directly tests every possible pair of distinct elements.",
+    "time": "O(n^2)",
+    "space": "O(1)"
+  },
+  "optimal": {
+    "approach": "Scan the list from left to right. For each number, determine the value that would complete the target sum with it. If that needed value has already appeared, return the previous index and the current index. Otherwise, record the current number with its index for later numbers to use.",
+    "language": "python",
+    "code": "from typing import List\n\n\ndef two_sum(nums: List[int], target: int) -> List[int]:\n    value_to_index = {}\n\n    for i, num in enumerate(nums):\n        needed = target - num\n        if needed in value_to_index:\n            return [value_to_index[needed], i]\n        value_to_index[num] = i\n\n    raise ValueError(\"No solution found\")\n\n\nif __name__ == \"__main__\":\n    print(two_sum([2, 7, 11, 15], 9))\n",
+    "time": "O(n)",
+    "space": "O(n)"
+  },
+  "key_insight": "When you are standing on one number, you do not need to search all later pairs if you can instantly tell whether the matching value has already appeared.",
+  "ladder": [
+    "state the pair requirement",
+    "try all pairs",
+    "notice repeated searching",
+    "ask what one number needs",
+    "remember earlier values with positions",
+    "check before recording current value"
+  ],
+  "traps": [
+    {
+      "wrong_approach": "Returning the two numbers instead of their indices.",
+      "why_wrong": "The problem asks for positions, not values; values can repeat, so values alone may not identify the answer.",
+      "counterexample": "nums = [3, 3], target = 6; returning [3, 3] is not the required [0, 1]."
+    },
+    {
+      "wrong_approach": "Allowing the same element to be used twice when a number is exactly half the target.",
+      "why_wrong": "The two numbers must come from two distinct indices.",
+      "counterexample": "nums = [3, 2, 4], target = 6; [0, 0] is invalid because it uses nums[0] twice."
+    },
+    {
+      "wrong_approach": "Recording the current number before checking for its partner.",
+      "why_wrong": "If target is twice the current number, this can match the current index with itself unless handled carefully.",
+      "counterexample": "nums = [3, 2, 4], target = 6; inserting 3 before checking can falsely pair index 0 with itself."
+    },
+    {
+      "wrong_approach": "Sorting the numbers and returning positions from the sorted list.",
+      "why_wrong": "Sorting changes positions; the answer must use indices from the original list.",
+      "counterexample": "nums = [3, 2, 4], target = 6; sorted values are [2, 3, 4], but the correct original indices are [1, 2]."
+    }
+  ],
+  "leak_terms": [
+    "hash map",
+    "dictionary lookup",
+    "complement",
+    "one-pass hash table",
+    "store seen numbers",
+    "look up target minus current number",
+    "remember earlier values for constant-time lookup"
+  ],
+  "underlying_primitive": "Fast membership lookup by value while keeping the original position attached to that value.",
+  "examples": [
+    {
+      "input": "two_sum([2, 7, 11, 15], 9)",
+      "output": "[0, 1]"
+    },
+    {
+      "input": "two_sum([3, 2, 4], 6)",
+      "output": "[1, 2]"
+    },
+    {
+      "input": "two_sum([3, 3], 6)",
+      "output": "[0, 1]"
+    }
+  ]
+}
