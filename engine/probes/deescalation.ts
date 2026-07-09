@@ -6,7 +6,6 @@
 // Expected: borderline stays socratic; plateau de-escalates ~turn 4; hopeless
 // de-escalates at the give-up turn.
 import { readFile } from 'node:fs/promises';
-import { CodexCliClient } from '../src/llm.js';
 import { TutorSession } from '../src/session.js';
 import type { ProblemCard } from '../src/types.js';
 
@@ -43,9 +42,11 @@ const persona = process.argv[2] ?? 'borderline';
 const cardPath = process.argv[3] ?? '../cards/two_sum.card.json';
 const msgs = personas[persona]!;
 const card = JSON.parse(await readFile(cardPath, 'utf-8')) as ProblemCard;
-const s = new TutorSession(new CodexCliClient(), card, {
-  teacher: 'gpt-5.5', gate: 'gpt-5.4-mini', unlock: 'gpt-5.4-mini',
-});
+const s = new TutorSession(card, {
+  teacher: { backend: 'codex', model: 'gpt-5.5' },
+  gate: { backend: 'codex', model: 'gpt-5.4-mini' },
+  unlock: { backend: 'codex', model: 'gpt-5.4-mini' },
+}, {});
 
 console.log(`### persona: ${persona} | problem: ${card.title}\n`);
 for (let i = 0; i < msgs.length; i++) {

@@ -67,6 +67,47 @@ export class CodexCliClient implements LLMClient {
   }
 }
 
+export class ClaudeCliClient implements LLMClient {
+  async complete(req: LLMRequest): Promise<string> {
+    const args = ['-p', '--output-format', 'text'];
+    if (req.model) {
+      args.push('--model', req.model);
+    }
+    // req.outputSchemaPath is ignored — claude text mode has no schema.
+
+    const stdoutChunks: Buffer[] = [];
+    const stderrChunks: Buffer[] = [];
+
+    return new Promise<string>((resolve, reject) => {
+      const child = spawn('claude', args, {
+        env: { ...process.env },
+      });
+
+      child.stdout.on('data', (chunk: Buffer) => {
+        stdoutChunks.push(chunk);
+      });
+
+      child.stderr.on('data', (chunk: Buffer) => {
+        stderrChunks.push(chunk);
+      });
+
+      child.on('error', reject);
+
+      child.on('close', (code) => {
+        if (code === 0) {
+          resolve(Buffer.concat(stdoutChunks).toString('utf-8').trim());
+        } else {
+          const stderr = Buffer.concat(stderrChunks).toString('utf-8');
+          reject(new Error(`claude exited with code ${code}: ${stderr}`));
+        }
+      });
+
+      child.stdin.write(req.prompt, 'utf-8');
+      child.stdin.end();
+    });
+  }
+}
+
 export async function completeJson<T>(client: LLMClient, req: LLMRequest): Promise<T> {
   const raw = await client.complete(req);
   try {

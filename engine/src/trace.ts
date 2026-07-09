@@ -3,7 +3,7 @@ import type { GateVerdict, TutorMode } from './types.js';
 import type { LLMClient, LLMRequest } from './llm.js';
 
 export interface LLMCallTrace {
-  label: string; model: string; ms: number;
+  label: string; backend: string; model: string; ms: number;
   promptChars: number; outputChars: number;
   prompt: string; output: string;
 }
@@ -47,10 +47,12 @@ export class JsonlTracer implements Tracer {
 export class TracingLLMClient implements LLMClient {
   private readonly inner: LLMClient;
   private readonly tracer: Tracer;
+  private readonly backend: string;
 
-  constructor(inner: LLMClient, tracer: Tracer) {
+  constructor(inner: LLMClient, tracer: Tracer, backend = 'unknown') {
     this.inner = inner;
     this.tracer = tracer;
+    this.backend = backend;
   }
 
   async complete(req: LLMRequest): Promise<string> {
@@ -59,6 +61,7 @@ export class TracingLLMClient implements LLMClient {
     const ms = Date.now() - start;
     this.tracer.recordCall({
       label: req.label ?? 'unknown',
+      backend: this.backend,
       model: req.model,
       ms,
       promptChars: req.prompt.length,

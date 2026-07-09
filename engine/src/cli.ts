@@ -2,9 +2,8 @@ import { mkdir, readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import * as readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
-import { CodexCliClient } from './llm.js';
 import { REPO_ROOT } from './paths.js';
-import { TutorSession } from './session.js';
+import { TutorSession, type SessionModels } from './session.js';
 import { JsonlTracer } from './trace.js';
 import type { ProblemCard } from './types.js';
 
@@ -25,12 +24,12 @@ async function main(): Promise<void> {
   const logPath = join(logsDir, `session-${timestamp}.jsonl`);
   const tracer = new JsonlTracer(logPath);
 
-  const client = new CodexCliClient();
-  const session = new TutorSession(client, card, {
-    teacher: 'gpt-5.5',
-    gate: 'gpt-5.4-mini',
-    unlock: 'gpt-5.4-mini',
-  }, tracer);
+  const models: SessionModels = {
+    teacher: { backend: 'codex', model: 'gpt-5.5' },
+    gate: { backend: 'codex', model: 'gpt-5.4-mini' },
+    unlock: { backend: 'codex', model: 'gpt-5.4-mini' },
+  };
+  const session = new TutorSession(card, models, { tracer });
 
   console.log(`Tutoring: ${card.title}`);
   console.log(`(logging to ${logPath})`);

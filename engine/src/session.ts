@@ -1,11 +1,13 @@
 import { gateCheck } from './gate.js';
 import type { LLMClient } from './llm.js';
+import { createClient } from './providers.js';
 import { teacherTurn } from './teacher.js';
 import { NullTracer, TracingLLMClient, type Tracer } from './trace.js';
 import type { GateVerdict, Message, ProblemCard, TutorMode } from './types.js';
 import { judgeUnlock } from './unlockJudge.js';
 
-export interface SessionModels { teacher: string; gate: string; unlock: string }
+export interface RoleConfig { backend: string; model: string }
+export interface SessionModels { teacher: RoleConfig; gate: RoleConfig; unlock: RoleConfig }
 
 export interface TurnResult {
   mode: TutorMode;
@@ -34,7 +36,9 @@ export function shouldJudgeUnlock(studentMessage: string, lockedTerms: string[])
 
 export class TutorSession {
   private readonly card: ProblemCard;
-  private readonly client: LLMClient;
+  private readonly teacherClient: LLMClient;
+  private readonly gateClient: LLMClient;
+  private readonly unlockClient: LLMClient;
   private readonly models: SessionModels;
   private readonly tracer: Tracer;
   private readonly _transcript: Message[] = [];
@@ -42,12 +46,15 @@ export class TutorSession {
   private turnCounter = 0;
 
   constructor(
-    client: LLMClient,
     card: ProblemCard,
     models: SessionModels,
-    tracer: Tracer = new NullTracer(),
+    opts?: { tracer?: Tracer; createClient?: (backend: string) => LLMClient },
   ) {
-    this.client = new TracingLLMClient(client, tracer);
+    const resolve = opts?.createClient ?? createClient;
+    const tracer = opts?.tracer ?? new NullTracer();
+    this.teacherClient = new TracingLLMClient(resolve(models.teacher.backend), tracer, models.teacher.backend);
+    this.gateClient = new TracingLLMClient(resolve(models.gate.backend), tracer, models.gate.backend);
+    this.unlockClient = new TracingLLMClient(resolve(models.unlock.backend), tracer, models.unlock.backend);
     this.card = card;
     this.models = models;
     this.tracer = tracer;
@@ -79,7 +86,7 @@ export class TutorSession {
         }
       }
       const result = await judgeUnlock(
-        this.client, this._lockedTerms, prevTeacher, studentMessage, this.models.unlock,
+        this.unlockClient, this._lockedTerms, prevTeacher, studentMessage, this.models.unlock.model,
       );
       unlockedThisTurn = result.unlocked;
       for (const term of unlockedThisTurn) {
@@ -89,20 +96,20 @@ export class TutorSession {
     }
 
     let t = await teacherTurn(
-      this.client, this.card, this._transcript, this._lockedTerms, this.models.teacher,
+      this.teacherClient, this.card, this._transcript, this._lockedTerms, this.models.teacher.model,
     );
     let verdict = await gateCheck(
-      this.client, this.card, t.mode, studentMessage, t.reply, this._lockedTerms, this.models.gate,
+      this.gateClient, this.card, t.mode, studentMessage, t.reply, this._lockedTerms, this.models.gate.model,
     );
     let redrafted = false;
 
     if (verdict.verdict === 'REVISE') {
       t = await teacherTurn(
-        this.client, this.card, this._transcript, this._lockedTerms, this.models.teacher,
+        this.teacherClient, this.card, this._transcript, this._lockedTerms, this.models.teacher.model,
         { rejectedDraft: t.reply, note: verdict.note },
       );
       verdict = await gateCheck(
-        this.client, this.card, t.mode, studentMessage, t.reply, this._lockedTerms, this.models.gate,
+        this.gateClient, this.card, t.mode, studentMessage, t.reply, this._lockedTerms, this.models.gate.model,
       );
       redrafted = true;
     }
