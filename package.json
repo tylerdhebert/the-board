@@ -1,0 +1,10 @@
+{
+  "name": "socratic-tutor",
+  "private": true,
+  "type": "module",
+  "description": "A Socratic coding tutor that leads you to the answer and never hands it over.",
+  "scripts": {
+    "dev": "node dev.mjs",
+    "setup": "npm install --prefix engine && npm install --prefix server && npm install --prefix web"
+  }
+}
