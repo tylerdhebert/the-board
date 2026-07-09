@@ -11,6 +11,22 @@ import {
 
 const LANGS = ['csharp', 'typescript', 'python', 'javascript', 'java', 'cpp', 'go'] as const
 
+// Monaco language id -> LeetCode langSlug (for picking the starter scaffold).
+const LANG_SLUG: Record<string, string> = {
+  csharp: 'csharp',
+  typescript: 'typescript',
+  python: 'python3',
+  javascript: 'javascript',
+  java: 'java',
+  cpp: 'cpp',
+  go: 'golang',
+}
+
+function snippetFor(problem: Problem | null, lang: string): string {
+  const slug = LANG_SLUG[lang] ?? lang
+  return problem?.codeSnippets?.find((s) => s.langSlug === slug)?.code ?? ''
+}
+
 function LoadingBoard({ query, ingesting }: { query: string; ingesting: boolean }) {
   const steps = ingesting
     ? [
@@ -73,7 +89,8 @@ export default function App() {
   const [notes, setNotes] = useState<Note[]>([])
   const [input, setInput] = useState('')
   const [code, setCode] = useState('')
-  const [lang, setLang] = useState<string>('python')
+  const [seed, setSeed] = useState('') // the scaffold currently loaded, to detect edits
+  const [lang, setLang] = useState<string>('typescript')
   const [busy, setBusy] = useState(false)
   const [loading, setLoading] = useState(false)
   const [ingesting, setIngesting] = useState(false)
@@ -106,7 +123,9 @@ export default function App() {
       setProblem(res.problem)
       setNotes([])
       setInput('')
-      setCode('')
+      const stub = snippetFor(res.problem, lang)
+      setCode(stub)
+      setSeed(stub)
     } catch (err) {
       setError(
         (err instanceof Error ? err.message : String(err)) +
@@ -145,6 +164,16 @@ export default function App() {
     const c = code.trim()
     if (!c || busy) return
     void turn(reviewPrompt(c), '↳ review my work')
+  }
+
+  function changeLang(next: string) {
+    setLang(next)
+    // Swap the scaffold only if the editor still holds the untouched stub (or is empty).
+    if (code === seed || code.trim() === '') {
+      const stub = snippetFor(problem, next)
+      setCode(stub)
+      setSeed(stub)
+    }
   }
 
   function onKey(e: KeyboardEvent<HTMLTextAreaElement>) {
@@ -206,7 +235,7 @@ export default function App() {
               <section className="workarea">
                 <div className="worklabel">
                   <span>your work</span>
-                  <select className="langpick" value={lang} onChange={(e) => setLang(e.target.value)}>
+                  <select className="langpick" value={lang} onChange={(e) => changeLang(e.target.value)}>
                     {LANGS.map((l) => (
                       <option key={l} value={l}>
                         {l}

@@ -7,6 +7,7 @@ import {
   getOrIngestCard,
   listCards,
   loadCard,
+  loadSnippets,
   studentSafeProblem,
 } from './engine.js';
 
@@ -71,7 +72,7 @@ async function handle(
       sessions.set(sessionId, new TutorSession(card, DEFAULT_MODELS));
       sendJson(res, 200, {
         sessionId,
-        problem: studentSafeProblem(card),
+        problem: { ...studentSafeProblem(card), codeSnippets: await loadSnippets(cardName) },
       });
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
@@ -92,12 +93,12 @@ async function handle(
       return;
     }
     try {
-      const { card, cached } = await getOrIngestCard(query);
+      const { card, cached, snippets } = await getOrIngestCard(query);
       const sessionId = randomUUID();
       sessions.set(sessionId, new TutorSession(card, DEFAULT_MODELS));
       sendJson(res, 200, {
         sessionId,
-        problem: studentSafeProblem(card),
+        problem: { ...studentSafeProblem(card), codeSnippets: snippets },
         cached,
       });
     } catch (err) {

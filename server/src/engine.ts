@@ -6,13 +6,14 @@ import {
   TutorSession,
   fetchProblem,
   slugFromUrl,
+  type CodeSnippet,
   type ProblemCard,
   type SessionModels,
 } from '../../engine/src/index.js';
 import { ingest } from '../../engine/src/ingest.js';
 
 export { TutorSession };
-export type { ProblemCard, SessionModels };
+export type { CodeSnippet, ProblemCard, SessionModels };
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '../..');
@@ -57,19 +58,35 @@ export function toSlug(query: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
+async function readSnippets(filePath: string): Promise<CodeSnippet[]> {
+  try {
+    const raw = await readFile(filePath, 'utf8');
+    return JSON.parse(raw) as CodeSnippet[];
+  } catch {
+    return [];
+  }
+}
+
+/** Starter scaffolds for a built-in card (by name), if any were cached. */
+export async function loadSnippets(name: string): Promise<CodeSnippet[]> {
+  assertSafeCardName(name);
+  return readSnippets(path.join(cardsDir, `${name}.snippets.json`));
+}
+
 export async function getOrIngestCard(
   query: string,
   model = 'gpt-5.5',
-): Promise<{ card: ProblemCard; verified: boolean; cached: boolean }> {
+): Promise<{ card: ProblemCard; verified: boolean; cached: boolean; snippets: CodeSnippet[] }> {
   const slug = toSlug(query);
   assertSafeCardName(slug);
   const cachePath = path.join(cardsDir, `${slug}.card.json`);
+  const snippetsPath = path.join(cardsDir, `${slug}.snippets.json`);
 
   try {
     await access(cachePath);
     const raw = await readFile(cachePath, 'utf8');
     const card = JSON.parse(raw) as ProblemCard;
-    return { card, verified: true, cached: true };
+    return { card, verified: true, cached: true, snippets: await readSnippets(snippetsPath) };
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code;
     if (code !== 'ENOENT') throw err;
@@ -86,7 +103,8 @@ export async function getOrIngestCard(
   const client = new CodexCliClient();
   const { card, verification } = await ingest(client, problem.statement, model);
   await writeFile(cachePath, JSON.stringify(card, null, 2) + '\n', 'utf8');
-  return { card, verified: verification.ok, cached: false };
+  await writeFile(snippetsPath, JSON.stringify(problem.codeSnippets, null, 2) + '\n', 'utf8');
+  return { card, verified: verification.ok, cached: false, snippets: problem.codeSnippets };
 }
 
 export async function loadCard(name: string): Promise<ProblemCard> {

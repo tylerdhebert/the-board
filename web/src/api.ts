@@ -1,7 +1,14 @@
+export interface CodeSnippet {
+  lang: string
+  langSlug: string
+  code: string
+}
+
 export interface Problem {
   title: string
   statement: string
   constraints: string
+  codeSnippets?: CodeSnippet[]
 }
 
 export interface CardRef {

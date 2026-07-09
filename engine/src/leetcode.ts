@@ -1,9 +1,16 @@
+export interface CodeSnippet {
+  lang: string; // display name, e.g. "C#"
+  langSlug: string; // e.g. "csharp", "typescript", "python3"
+  code: string; // the starter stub LeetCode shows in its editor
+}
+
 export interface LeetCodeProblem {
   title: string;
   slug: string;
   difficulty: string;
   contentHtml: string; // raw HTML from LeetCode
   statement: string; // plain-text, ready to feed to ingest()
+  codeSnippets: CodeSnippet[]; // per-language starter scaffolds
 }
 
 export function slugFromUrl(input: string): string {
@@ -54,7 +61,7 @@ export async function fetchProblem(input: string): Promise<LeetCodeProblem> {
     },
     body: JSON.stringify({
       query:
-        'query q($titleSlug: String!){ question(titleSlug:$titleSlug){ title titleSlug difficulty content } }',
+        'query q($titleSlug: String!){ question(titleSlug:$titleSlug){ title titleSlug difficulty content codeSnippets { lang langSlug code } } }',
       variables: { titleSlug: slug },
     }),
   });
@@ -62,7 +69,15 @@ export async function fetchProblem(input: string): Promise<LeetCodeProblem> {
     throw new Error(`LeetCode GraphQL request failed with status ${res.status}`);
   }
   const json = (await res.json()) as {
-    data?: { question: null | { title: string; titleSlug: string; difficulty: string; content: string } };
+    data?: {
+      question: null | {
+        title: string;
+        titleSlug: string;
+        difficulty: string;
+        content: string;
+        codeSnippets: CodeSnippet[] | null;
+      };
+    };
   };
   const question = json.data?.question;
   if (question == null) {
@@ -76,5 +91,6 @@ export async function fetchProblem(input: string): Promise<LeetCodeProblem> {
     difficulty: question.difficulty,
     contentHtml: question.content,
     statement,
+    codeSnippets: question.codeSnippets ?? [],
   };
 }
