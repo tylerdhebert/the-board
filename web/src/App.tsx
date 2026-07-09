@@ -277,7 +277,7 @@ export default function App() {
           <feDisplacementMap in="SourceGraphic" in2="n" scale="7" result="d" />
           {/* dry-chalk grain: high-frequency noise erodes the stroke's alpha */}
           <feTurbulence type="fractalNoise" baseFrequency="0.4" numOctaves="2" seed="3" result="grain" />
-          <feColorMatrix in="grain" type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1.6 -0.12" result="mask" />
+          <feColorMatrix in="grain" type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1.6 -0.08" result="mask" />
           <feComposite in="d" in2="mask" operator="in" />
         </filter>
       </svg>
