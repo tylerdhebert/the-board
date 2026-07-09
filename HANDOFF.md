@@ -46,12 +46,15 @@ distinctive; the user explicitly rejected the generic dark-rounded-card look.
 
 ## How to run
 ```
-npm run dev            # from repo root — launches api :8787 + web :5173 together,
-                       # with a tree-kill launcher (dev.mjs) that cleans up both.
+npm run desktop        # THE app: api + web + frameless Electron shell (one command,
+                       # closing the window tears everything down)
+npm run dev            # browser mode: api :8787 + web :5173, open the URL in a tab
 # or separately:
 cd server && PORT=8787 npx tsx src/server.ts
 cd web && npx vite
 ```
+For UI debugging in the shell (CDP, screenshots, eval) see
+`docs/desktop-debugging.md`.
 Requires `codex` (and optionally `claude`) CLI on PATH. First novel problem
 takes ~30–60s to ingest, then it's cached in `cards/`.
 
@@ -101,11 +104,17 @@ restart 8787 to pick it up (tsx isn't in watch mode). Web changes hot-reload.
    Client subtleties that matter: didOpen empty → wait `$/progress` end →
    didChange overlay; requests flush pending didChange first (stale-buffer
    race, observed live). AI autocomplete stays banned.
-3. **Electron shell** (confirmed 2026-07-09 — the user always intended this to
-   be an Electron app; the intent predates the handoff docs and was lost, so it
-   is recorded here now). Packaging-only: main process boots the api server,
-   window loads the web build. The web/server split (answer-key boundary) and
-   the LSP-over-WebSocket bridge carry over unchanged.
+3. ~~**Electron shell**~~ SHIPPED 2026-07-09 (`7a15720`, spec
+   `.agent-tasks/electron-shell.md`). `npm run desktop` = api + vite + a
+   frameless Electron window via the tree-kill launcher; the header strip is
+   the titlebar (drag region + chalk winctl controls, browser mode untouched).
+   AI-debug tooling mirrors effortless: CDP :9223, `window.tutorDesktop`
+   bridge, `node scripts/shot.mjs capture|eval` (native screenshots to
+   gitignored `.shots/`, path + sha256) — canonical workflow in
+   `docs/desktop-debugging.md`. Gotcha baked in: occlusion calc + background
+   throttling are disabled or capturePage throws UnknownVizError when the
+   window is covered. Still open: packaging/installer (electron-builder) if
+   ever wanted.
 4. **API-client backends** (`AnthropicClient`/`OpenAIClient` implementing
    `LLMClient`) for when the user has API keys — faster + structured JSON output
    removes `completeJson`'s parse-guessing. No keys in env as of this session;
