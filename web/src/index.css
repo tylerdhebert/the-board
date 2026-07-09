@@ -96,6 +96,13 @@ body::before {
   gap: 10px;
   font-family: var(--display);
   white-space: nowrap;
+  /* it's a button now (way home to the ledger) — keep it looking like chalk */
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
 }
 .wordmark .sigma {
   font-size: 26px;
@@ -230,6 +237,109 @@ body::before {
   line-height: 1.9;
 }
 .hero .how span { color: var(--coral); }
+
+/* compressed hero when the ledger is present */
+.hero.compressed {
+  justify-content: flex-start;
+  padding-top: 8px;
+}
+.hero.compressed h1 {
+  font-size: clamp(28px, 4.2vw, 44px);
+  margin-bottom: 12px;
+}
+.hero.compressed p { font-size: 15px; margin-bottom: 6px; }
+
+/* the ledger — browsable problem roster */
+.ledger {
+  margin-top: 28px;
+  max-width: 560px;
+}
+.ledger .eyebrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--chalk-faint);
+  margin: 0 0 14px;
+}
+.ledger-block + .ledger-block { margin-top: 2px; }
+.ledger-row {
+  display: grid;
+  grid-template-columns: 1.4em 1fr auto;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  color: var(--chalk);
+  font-family: var(--mono);
+  font-size: 13.5px;
+  text-align: left;
+  padding: 7px 0;
+  cursor: pointer;
+}
+.ledger-row:hover { border-bottom-color: var(--chalk-line); }
+.ledger-row .mark {
+  font-size: 14px;
+  line-height: 1;
+  text-align: center;
+}
+.ledger-row .mark-solved { color: var(--sky); }
+.ledger-row .mark-attempted { color: var(--amber); }
+.ledger-row .mark-new { color: var(--chalk-faint); }
+.ledger-row .title {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: 0.01em;
+  color: var(--chalk);
+}
+.ledger-row .meta {
+  font-size: 11.5px;
+  color: var(--chalk-faint);
+  text-transform: lowercase;
+  white-space: nowrap;
+}
+.ledger-sessions {
+  padding: 4px 0 10px 1.4em;
+  margin-left: 10px;
+  border-left: 1.5px dashed var(--chalk-line);
+}
+.ledger-session {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 5px 0 5px 14px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--chalk-dim);
+}
+.ledger-session .sess-meta { flex: 1; text-transform: lowercase; }
+.ledger-session .sess-action,
+.ledger-fresh {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--chalk-line);
+  color: var(--amber);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+  padding: 0 1px 1px;
+  cursor: pointer;
+}
+.ledger-session .sess-action:hover,
+.ledger-fresh:hover {
+  color: #ffd76a;
+  border-bottom-color: var(--amber);
+}
+.ledger-fresh {
+  display: block;
+  margin: 6px 0 2px 14px;
+  color: var(--chalk-dim);
+  border-bottom-color: var(--chalk-line);
+}
 
 /* loading the board (novel-problem ingest) */
 .loadingboard {

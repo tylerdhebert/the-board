@@ -50,7 +50,11 @@ export class TutorSession {
   constructor(
     card: ProblemCard,
     models: SessionModels,
-    opts?: { tracer?: Tracer; createClient?: (backend: string) => LLMClient },
+    opts?: {
+      tracer?: Tracer;
+      createClient?: (backend: string) => LLMClient;
+      restore?: { transcript: Message[]; lockedTerms: string[]; turnCounter: number };
+    },
   ) {
     const resolve = opts?.createClient ?? createClient;
     const tracer = opts?.tracer ?? new NullTracer();
@@ -60,7 +64,13 @@ export class TutorSession {
     this.card = card;
     this.models = models;
     this.tracer = tracer;
-    this._lockedTerms = [...card.leak_terms];
+    if (opts?.restore) {
+      this._transcript.push(...opts.restore.transcript.map((m) => ({ ...m })));
+      this._lockedTerms = [...opts.restore.lockedTerms];
+      this.turnCounter = opts.restore.turnCounter;
+    } else {
+      this._lockedTerms = [...card.leak_terms];
+    }
   }
 
   get transcript(): readonly Message[] {
@@ -69,6 +79,10 @@ export class TutorSession {
 
   get lockedTerms(): readonly string[] {
     return this._lockedTerms.slice();
+  }
+
+  get turn(): number {
+    return this.turnCounter;
   }
 
   async submit(studentMessage: string, onStage?: (stage: TurnStage) => void): Promise<TurnResult> {

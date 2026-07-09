@@ -8,3 +8,4 @@ _*.txt
 logs/
 server/.lsp-scratch/
 server/.run-scratch/
+sessions/

@@ -7,6 +7,7 @@ import {
   fetchProblem,
   slugFromUrl,
   type CodeSnippet,
+  type Message,
   type ProblemCard,
   type SessionModels,
 } from '../../engine/src/index.js';
@@ -15,7 +16,7 @@ import { extractCases, type CaseSpec } from '../../engine/src/exampleCases.js';
 import { runStudentCode, type StudentRunResult } from '../../engine/src/runStudentCode.js';
 
 export { TutorSession, extractCases, runStudentCode };
-export type { CodeSnippet, ProblemCard, SessionModels, CaseSpec, StudentRunResult };
+export type { CodeSnippet, Message, ProblemCard, SessionModels, CaseSpec, StudentRunResult };
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '../..');

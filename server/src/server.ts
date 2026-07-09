@@ -16,6 +16,12 @@ import {
   type ProblemCard,
 } from './engine.js';
 import { attachLspBridge, lspInfo } from './lsp.js';
+import {
+  listSessions,
+  loadSession,
+  saveSession,
+  type PersistedSession,
+} from './sessionStore.js';
 
 const PORT = Number(process.env.PORT ?? 8787);
 
@@ -24,6 +30,7 @@ type SessionEntry = {
   card: ProblemCard;
   cardName: string;
   cases?: CaseSpec[];
+  persisted: PersistedSession;
 };
 
 const sessions = new Map<string, SessionEntry>();
@@ -39,7 +46,7 @@ const LANG_SLUG: Record<string, string> = {
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+  'Access-Control-Allow-Methods': 'POST, GET, PUT, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
@@ -67,6 +74,66 @@ async function readJsonBody(req: http.IncomingMessage): Promise<unknown> {
   return JSON.parse(raw) as unknown;
 }
 
+async function newEntry(card: ProblemCard, cardName: string): Promise<SessionEntry> {
+  const sessionId = randomUUID();
+  const now = new Date().toISOString();
+  const session = new TutorSession(card, DEFAULT_MODELS);
+  const persisted: PersistedSession = {
+    id: sessionId,
+    cardName,
+    title: card.title,
+    startedAt: now,
+    updatedAt: now,
+    solved: false,
+    lang: '',
+    code: '',
+    notes: [],
+    lastRun: null,
+    engine: {
+      transcript: [...session.transcript],
+      lockedTerms: [...session.lockedTerms],
+      turnCounter: session.turn,
+    },
+  };
+  await saveSession(persisted);
+  const entry: SessionEntry = { session, card, cardName, persisted };
+  sessions.set(sessionId, entry);
+  return entry;
+}
+
+async function getOrRestore(id: string): Promise<SessionEntry | null> {
+  const hit = sessions.get(id);
+  if (hit) return hit;
+  const persisted = await loadSession(id);
+  if (!persisted) return null;
+  try {
+    const card = await loadCard(persisted.cardName);
+    const session = new TutorSession(card, DEFAULT_MODELS, {
+      restore: persisted.engine,
+    });
+    const entry: SessionEntry = {
+      session,
+      card,
+      cardName: persisted.cardName,
+      persisted,
+    };
+    sessions.set(id, entry);
+    return entry;
+  } catch {
+    return null;
+  }
+}
+
+async function persistEntry(entry: SessionEntry): Promise<void> {
+  entry.persisted.engine = {
+    transcript: [...entry.session.transcript],
+    lockedTerms: [...entry.session.lockedTerms],
+    turnCounter: entry.session.turn,
+  };
+  entry.persisted.updatedAt = new Date().toISOString();
+  await saveSession(entry.persisted);
+}
+
 async function handle(
   req: http.IncomingMessage,
   res: http.ServerResponse,
@@ -81,8 +148,59 @@ async function handle(
     return;
   }
 
-  if (method === 'GET' && pathname === '/api/cards') {
-    sendJson(res, 200, await listCards());
+  if (method === 'GET' && pathname === '/api/problems') {
+    const cards = await listCards();
+    const allSessions = await listSessions();
+    const byCard = new Map<string, PersistedSession[]>();
+    for (const s of allSessions) {
+      const list = byCard.get(s.cardName) ?? [];
+      list.push(s);
+      byCard.set(s.cardName, list);
+    }
+    type ProblemRow = {
+      name: string;
+      title: string;
+      status: 'new' | 'attempted' | 'solved';
+      sessions: { id: string; startedAt: string; updatedAt: string; turns: number; solved: boolean }[];
+      latestUpdatedAt: string | null;
+    };
+    const rows: ProblemRow[] = [];
+    for (const card of cards) {
+      const sess = byCard.get(card.name) ?? [];
+      sess.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+      const status: ProblemRow['status'] = sess.some((s) => s.solved)
+        ? 'solved'
+        : sess.length > 0
+          ? 'attempted'
+          : 'new';
+      rows.push({
+        name: card.name,
+        title: card.title,
+        status,
+        sessions: sess.map((s) => ({
+          id: s.id,
+          startedAt: s.startedAt,
+          updatedAt: s.updatedAt,
+          turns: s.engine.turnCounter,
+          solved: s.solved,
+        })),
+        latestUpdatedAt: sess[0]?.updatedAt ?? null,
+      });
+    }
+    rows.sort((a, b) => {
+      const aTouched = a.latestUpdatedAt !== null;
+      const bTouched = b.latestUpdatedAt !== null;
+      if (aTouched && bTouched) {
+        return b.latestUpdatedAt!.localeCompare(a.latestUpdatedAt!);
+      }
+      if (aTouched !== bTouched) return aTouched ? -1 : 1;
+      return a.title.localeCompare(b.title);
+    });
+    sendJson(
+      res,
+      200,
+      rows.map(({ name, title, status, sessions: sess }) => ({ name, title, status, sessions: sess })),
+    );
     return;
   }
 
@@ -100,14 +218,9 @@ async function handle(
     }
     try {
       const card = await loadCard(cardName);
-      const sessionId = randomUUID();
-      sessions.set(sessionId, {
-        session: new TutorSession(card, DEFAULT_MODELS),
-        card,
-        cardName,
-      });
+      const entry = await newEntry(card, cardName);
       sendJson(res, 200, {
-        sessionId,
+        sessionId: entry.persisted.id,
         problem: { ...studentSafeProblem(card), codeSnippets: await loadSnippets(cardName) },
       });
     } catch (err) {
@@ -130,14 +243,9 @@ async function handle(
     }
     try {
       const { card, cached, snippets } = await getOrIngestCard(query);
-      const sessionId = randomUUID();
-      sessions.set(sessionId, {
-        session: new TutorSession(card, DEFAULT_MODELS),
-        card,
-        cardName: toSlug(query),
-      });
+      const entry = await newEntry(card, toSlug(query));
       sendJson(res, 200, {
-        sessionId,
+        sessionId: entry.persisted.id,
         problem: { ...studentSafeProblem(card), codeSnippets: snippets },
         cached,
       });
@@ -148,10 +256,55 @@ async function handle(
     return;
   }
 
+  const editorMatch = pathname.match(/^\/api\/session\/([^/]+)\/editor$/);
+  if (method === 'PUT' && editorMatch) {
+    const sessionId = editorMatch[1]!;
+    const entry = await getOrRestore(sessionId);
+    if (!entry) {
+      sendJson(res, 404, { error: 'session not found' });
+      return;
+    }
+    const body = (await readJsonBody(req)) as { code?: string; lang?: string };
+    if (typeof body.code !== 'string' || typeof body.lang !== 'string') {
+      sendJson(res, 400, { error: 'code and lang are required' });
+      return;
+    }
+    entry.persisted.code = body.code;
+    entry.persisted.lang = body.lang;
+    await persistEntry(entry);
+    res.writeHead(204, CORS);
+    res.end();
+    return;
+  }
+
+  const getSessionMatch = pathname.match(/^\/api\/session\/([^/]+)$/);
+  if (method === 'GET' && getSessionMatch) {
+    const sessionId = getSessionMatch[1]!;
+    const entry = await getOrRestore(sessionId);
+    if (!entry) {
+      sendJson(res, 404, { error: 'session not found' });
+      return;
+    }
+    sendJson(res, 200, {
+      sessionId: entry.persisted.id,
+      cardName: entry.cardName,
+      problem: {
+        ...studentSafeProblem(entry.card),
+        codeSnippets: await loadSnippets(entry.cardName),
+      },
+      notes: entry.persisted.notes,
+      code: entry.persisted.code,
+      lang: entry.persisted.lang,
+      lastRun: entry.persisted.lastRun,
+      solved: entry.persisted.solved,
+    });
+    return;
+  }
+
   const runMatch = pathname.match(/^\/api\/session\/([^/]+)\/run$/);
   if (method === 'POST' && runMatch) {
     const sessionId = runMatch[1]!;
-    const entry = sessions.get(sessionId);
+    const entry = await getOrRestore(sessionId);
     if (!entry) {
       sendJson(res, 404, { error: 'session not found' });
       return;
@@ -180,6 +333,13 @@ async function handle(
         entry.cases,
         scaffold,
       );
+      entry.persisted.lastRun = result;
+      entry.persisted.code = code;
+      entry.persisted.lang = language;
+      if (result.cases.length > 0 && result.cases.every((c) => c.pass)) {
+        entry.persisted.solved = true;
+      }
+      await persistEntry(entry);
       sendJson(res, 200, result);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -191,17 +351,18 @@ async function handle(
   const submitMatch = pathname.match(/^\/api\/session\/([^/]+)\/submit$/);
   if (method === 'POST' && submitMatch) {
     const sessionId = submitMatch[1]!;
-    const entry = sessions.get(sessionId);
+    const entry = await getOrRestore(sessionId);
     if (!entry) {
       sendJson(res, 404, { error: 'session not found' });
       return;
     }
-    const body = (await readJsonBody(req)) as { message?: string };
+    const body = (await readJsonBody(req)) as { message?: string; display?: string };
     const message = body.message;
     if (typeof message !== 'string') {
       sendJson(res, 400, { error: 'message is required' });
       return;
     }
+    const display = typeof body.display === 'string' ? body.display : undefined;
     res.writeHead(200, {
       ...CORS,
       'Content-Type': 'text/event-stream',
@@ -210,6 +371,19 @@ async function handle(
     });
     try {
       const result = await entry.session.submit(message, (stage) => sendEvent(res, 'stage', { stage }));
+      entry.persisted.notes.push({
+        role: 'student',
+        text: display ?? message,
+      });
+      entry.persisted.notes.push({
+        role: 'tutor',
+        text: result.reply,
+        mode: result.mode,
+        unlocked: result.unlockedThisTurn,
+        redrafted: result.redrafted,
+      });
+      // Reply first, persist after — a disk-write failure must never eat a
+      // reply the tutor already produced.
       sendEvent(res, 'result', {
         reply: result.reply,
         mode: result.mode,
@@ -217,6 +391,11 @@ async function handle(
         redrafted: result.redrafted,
       });
       res.end();
+      try {
+        await persistEntry(entry);
+      } catch (persistErr) {
+        console.warn('failed to persist session', sessionId, persistErr);
+      }
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       sendEvent(res, 'error', { error: errMsg });

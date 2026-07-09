@@ -3,12 +3,14 @@ import CodeEditor from './CodeEditor'
 import { mdLength, parseMd, renderMd } from './md'
 import {
   createSession,
-  getCards,
+  getProblems,
+  getSession,
   runExamples,
+  saveEditor,
   startSession,
   submitTurn,
-  type CardRef,
   type Problem,
+  type ProblemSummary,
   type StudentRunResult,
   type TurnStage,
 } from './api'
@@ -158,8 +160,30 @@ function reviewPrompt(code: string, run?: StudentRunResult | null): string {
   return prompt
 }
 
+function shortDate(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const now = new Date()
+  const diffMs = now.getTime() - d.getTime()
+  const mins = Math.floor(diffMs / 60_000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  if (days < 7) return `${days}d ago`
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }).toLowerCase()
+}
+
+function statusMark(status: ProblemSummary['status']): { mark: string; className: string } {
+  if (status === 'solved') return { mark: '✓', className: 'mark-solved' }
+  if (status === 'attempted') return { mark: '~', className: 'mark-attempted' }
+  return { mark: '·', className: 'mark-new' }
+}
+
 export default function App() {
-  const [cards, setCards] = useState<CardRef[]>([])
+  const [problems, setProblems] = useState<ProblemSummary[]>([])
+  const [expanded, setExpanded] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [problem, setProblem] = useState<Problem | null>(null)
@@ -177,10 +201,20 @@ export default function App() {
   const [run, setRun] = useState<StudentRunResult | null>(null)
   const [running, setRunning] = useState(false)
   const notesRef = useRef<HTMLDivElement>(null)
+  const savedLangRef = useRef(lang)
+
+  function refreshProblems() {
+    getProblems().then(setProblems).catch(() => {})
+  }
 
   useEffect(() => {
-    getCards().then(setCards).catch(() => {})
+    refreshProblems()
   }, [])
+
+  // Returning to the hero — refresh the ledger.
+  useEffect(() => {
+    if (!problem && !loading) refreshProblems()
+  }, [problem, loading])
 
   function scrollNotes() {
     const el = notesRef.current
@@ -191,10 +225,86 @@ export default function App() {
     scrollNotes()
   }, [notes, busy, stage])
 
+  // Debounced editor sync while a session is active.
+  useEffect(() => {
+    if (!sessionId) return
+    const timer = setTimeout(() => {
+      if (!code && lang === savedLangRef.current) return
+      void saveEditor(sessionId, code, lang).then(() => {
+        savedLangRef.current = lang
+      })
+    }, 2000)
+    return () => clearTimeout(timer)
+  }, [code, lang, sessionId])
+
+  function applyFreshSession(res: { sessionId: string; problem: Problem }) {
+    setSessionId(res.sessionId)
+    setProblem(res.problem)
+    setNotes([])
+    setInput('')
+    setError(null)
+    setRun(null)
+    const stub = snippetFor(res.problem, lang)
+    setCode(stub)
+    setSeed(stub)
+    savedLangRef.current = lang
+    refreshProblems()
+  }
+
+  async function beginCard(name: string, label?: string) {
+    if (loading) return
+    setLoadingQuery(label ?? name)
+    setIngesting(false)
+    setLoading(true)
+    setError(null)
+    try {
+      applyFreshSession(await createSession(name))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function resumeSession(id: string) {
+    if (loading) return
+    setLoadingQuery('resuming…')
+    setIngesting(false)
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await getSession(id)
+      setSessionId(res.sessionId)
+      setProblem(res.problem)
+      setNotes(
+        res.notes.map((n) => ({
+          role: n.role,
+          text: n.text,
+          mode: n.mode as Mode | undefined,
+          unlocked: n.unlocked,
+          redrafted: n.redrafted,
+          revealing: false,
+        })),
+      )
+      const nextLang = res.lang || lang
+      setLang(nextLang)
+      savedLangRef.current = nextLang
+      const stub = snippetFor(res.problem, nextLang)
+      setCode(res.code ? res.code : stub)
+      setSeed(stub)
+      setRun(res.lastRun)
+      setInput('')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setLoading(false)
+    }
+  }
+
   async function loadProblem() {
     const q = query.trim()
     if (!q || loading) return
-    const match = cards.find(
+    const match = problems.find(
       (c) => c.title.toLowerCase() === q.toLowerCase() || c.name === q.toLowerCase(),
     )
     setLoadingQuery(q)
@@ -203,14 +313,7 @@ export default function App() {
     setError(null)
     try {
       const res = match ? await createSession(match.name) : await startSession(q)
-      setSessionId(res.sessionId)
-      setProblem(res.problem)
-      setNotes([])
-      setInput('')
-      setRun(null)
-      const stub = snippetFor(res.problem, lang)
-      setCode(stub)
-      setSeed(stub)
+      applyFreshSession(res)
     } catch (err) {
       setError(
         (err instanceof Error ? err.message : String(err)) +
@@ -227,7 +330,10 @@ export default function App() {
     setBusy(true)
     setStage(null)
     try {
-      const r = await submitTurn(sessionId, sendText, setStage)
+      const r = await submitTurn(sessionId, sendText, {
+        display: displayText,
+        onStage: setStage,
+      })
       setNotes((p) => [
         ...p,
         {
@@ -270,11 +376,20 @@ export default function App() {
     try {
       const result = await runExamples(sessionId, code, lang)
       setRun(result)
+      refreshProblems()
     } catch (err) {
       setRun({ cases: [], error: err instanceof Error ? err.message : String(err) })
     } finally {
       setRunning(false)
     }
+  }
+
+  function onLedgerRow(p: ProblemSummary) {
+    if (p.status === 'new' || p.sessions.length === 0) {
+      void beginCard(p.name, p.title)
+      return
+    }
+    setExpanded((cur) => (cur === p.name ? null : p.name))
   }
 
   function changeLang(next: string) {
@@ -316,11 +431,27 @@ export default function App() {
       </svg>
 
       <header className="strip">
-        <div className="wordmark">
+        {/* Wordmark = way back to the ledger; the session lives server-side, so
+            leaving is safe and it shows up under the problem as resumable. */}
+        <button
+          type="button"
+          className="wordmark"
+          onClick={() => {
+            if (!problem || loading) return
+            setSessionId(null)
+            setProblem(null)
+            setNotes([])
+            setRun(null)
+            setInput('')
+            setError(null)
+            setExpanded(null)
+          }}
+          title={problem ? 'back to the board' : undefined}
+        >
           <span className="sigma">Σ</span>
           <b>The Board</b>
           <span className="tail">// answers stay on my side</span>
-        </div>
+        </button>
         <div className="loader">
           <input
             value={query}
@@ -406,7 +537,7 @@ export default function App() {
               </section>
             </>
           ) : (
-            <div className="hero">
+            <div className={`hero${problems.length > 0 ? ' compressed' : ''}`}>
               <p className="kicker">socratic coding tutor</p>
               <h1>
                 I won't tell you<br />
@@ -417,10 +548,65 @@ export default function App() {
                 Hand me a problem — by name or a LeetCode link — and we'll work it out
                 together. I ask the questions; you do the thinking.
               </p>
-              <p className="how">
-                try: <span>two sum</span> &nbsp;·&nbsp; <span>house robber</span> &nbsp;·&nbsp;{' '}
-                <span>container with most water</span>
-              </p>
+              {problems.length === 0 ? (
+                <p className="how">
+                  try: <span>two sum</span> &nbsp;·&nbsp; <span>house robber</span> &nbsp;·&nbsp;{' '}
+                  <span>container with most water</span>
+                </p>
+              ) : (
+                <div className="ledger">
+                  <p className="eyebrow">the board so far</p>
+                  {problems.map((p) => {
+                    const { mark, className } = statusMark(p.status)
+                    const latest = p.sessions[0]
+                    const n = p.sessions.length
+                    const meta =
+                      n === 0
+                        ? null
+                        : `${n} session${n === 1 ? '' : 's'} · ${shortDate(latest!.updatedAt)}`
+                    const open = expanded === p.name
+                    return (
+                      <div key={p.name} className="ledger-block">
+                        <button
+                          type="button"
+                          className="ledger-row"
+                          onClick={() => onLedgerRow(p)}
+                        >
+                          <span className={`mark ${className}`}>{mark}</span>
+                          <span className="title">{p.title}</span>
+                          {meta && <span className="meta">{meta}</span>}
+                        </button>
+                        {open && (
+                          <div className="ledger-sessions">
+                            {p.sessions.map((s) => (
+                              <div key={s.id} className="ledger-session">
+                                <span className="sess-meta">
+                                  {shortDate(s.updatedAt)} · {s.turns} turn{s.turns === 1 ? '' : 's'}
+                                  {s.solved ? ' · ✓' : ''}
+                                </span>
+                                <button
+                                  type="button"
+                                  className="sess-action"
+                                  onClick={() => void resumeSession(s.id)}
+                                >
+                                  resume
+                                </button>
+                              </div>
+                            ))}
+                            <button
+                              type="button"
+                              className="ledger-fresh"
+                              onClick={() => void beginCard(p.name, p.title)}
+                            >
+                              fresh start
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           )}
         </main>

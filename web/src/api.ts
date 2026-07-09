@@ -11,9 +11,40 @@ export interface Problem {
   codeSnippets?: CodeSnippet[]
 }
 
-export interface CardRef {
+export type ProblemStatus = 'new' | 'attempted' | 'solved'
+
+export interface ProblemSessionRef {
+  id: string
+  startedAt: string
+  updatedAt: string
+  turns: number
+  solved: boolean
+}
+
+export interface ProblemSummary {
   name: string
   title: string
+  status: ProblemStatus
+  sessions: ProblemSessionRef[]
+}
+
+export interface PersistedNote {
+  role: 'student' | 'tutor'
+  text: string
+  mode?: string
+  unlocked?: string[]
+  redrafted?: boolean
+}
+
+export interface ResumePayload {
+  sessionId: string
+  cardName: string
+  problem: Problem
+  notes: PersistedNote[]
+  code: string
+  lang: string
+  lastRun: StudentRunResult | null
+  solved: boolean
 }
 
 export interface TurnResult {
@@ -34,11 +65,27 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   if (!res.ok) {
     throw new Error(`Request failed: ${res.status}`)
   }
+  if (res.status === 204) return undefined as T
   return res.json() as Promise<T>
 }
 
-export async function getCards(): Promise<CardRef[]> {
-  return request<CardRef[]>('/api/cards')
+export async function getProblems(): Promise<ProblemSummary[]> {
+  return request<ProblemSummary[]>('/api/problems')
+}
+
+export async function getSession(id: string): Promise<ResumePayload> {
+  return request<ResumePayload>(`/api/session/${id}`)
+}
+
+export async function saveEditor(id: string, code: string, lang: string): Promise<void> {
+  try {
+    await request<void>(`/api/session/${id}/editor`, {
+      method: 'PUT',
+      body: JSON.stringify({ code, lang }),
+    })
+  } catch {
+    // fire-and-forget; swallow errors
+  }
 }
 
 export async function createSession(
@@ -55,12 +102,15 @@ export type TurnStage = 'unlock' | 'draft' | 'gate' | 'redraft'
 export async function submitTurn(
   sessionId: string,
   message: string,
-  onStage?: (stage: TurnStage) => void,
+  opts?: { display?: string; onStage?: (stage: TurnStage) => void },
 ): Promise<TurnResult> {
   const res = await fetch(`/api/session/${sessionId}/submit`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({
+      message,
+      ...(opts?.display !== undefined ? { display: opts.display } : {}),
+    }),
   })
   if (!res.ok) {
     throw new Error(`Request failed: ${res.status}`)
@@ -86,7 +136,7 @@ export async function submitTurn(
       if (!event || !data) continue
       const parsed = JSON.parse(data) as Record<string, unknown>
       if (event === 'stage') {
-        onStage?.(parsed.stage as TurnStage)
+        opts?.onStage?.(parsed.stage as TurnStage)
       } else if (event === 'result') {
         return parsed as unknown as TurnResult
       } else if (event === 'error') {
