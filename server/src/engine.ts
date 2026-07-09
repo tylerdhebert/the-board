@@ -11,9 +11,11 @@ import {
   type SessionModels,
 } from '../../engine/src/index.js';
 import { ingest } from '../../engine/src/ingest.js';
+import { extractCases, type CaseSpec } from '../../engine/src/exampleCases.js';
+import { runStudentCode, type StudentRunResult } from '../../engine/src/runStudentCode.js';
 
-export { TutorSession };
-export type { CodeSnippet, ProblemCard, SessionModels };
+export { TutorSession, extractCases, runStudentCode };
+export type { CodeSnippet, ProblemCard, SessionModels, CaseSpec, StudentRunResult };
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '../..');

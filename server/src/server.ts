@@ -4,16 +4,38 @@ import { URL } from 'node:url';
 import {
   DEFAULT_MODELS,
   TutorSession,
+  extractCases,
   getOrIngestCard,
   listCards,
   loadCard,
   loadSnippets,
+  runStudentCode,
   studentSafeProblem,
+  toSlug,
+  type CaseSpec,
+  type ProblemCard,
 } from './engine.js';
 import { attachLspBridge, lspInfo } from './lsp.js';
 
 const PORT = Number(process.env.PORT ?? 8787);
-const sessions = new Map<string, TutorSession>();
+
+type SessionEntry = {
+  session: TutorSession;
+  card: ProblemCard;
+  cardName: string;
+  cases?: CaseSpec[];
+};
+
+const sessions = new Map<string, SessionEntry>();
+
+const RUNNABLE = new Set(['python', 'typescript', 'javascript', 'csharp']);
+
+const LANG_SLUG: Record<string, string> = {
+  python: 'python3',
+  typescript: 'typescript',
+  javascript: 'javascript',
+  csharp: 'csharp',
+};
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -79,7 +101,11 @@ async function handle(
     try {
       const card = await loadCard(cardName);
       const sessionId = randomUUID();
-      sessions.set(sessionId, new TutorSession(card, DEFAULT_MODELS));
+      sessions.set(sessionId, {
+        session: new TutorSession(card, DEFAULT_MODELS),
+        card,
+        cardName,
+      });
       sendJson(res, 200, {
         sessionId,
         problem: { ...studentSafeProblem(card), codeSnippets: await loadSnippets(cardName) },
@@ -105,7 +131,11 @@ async function handle(
     try {
       const { card, cached, snippets } = await getOrIngestCard(query);
       const sessionId = randomUUID();
-      sessions.set(sessionId, new TutorSession(card, DEFAULT_MODELS));
+      sessions.set(sessionId, {
+        session: new TutorSession(card, DEFAULT_MODELS),
+        card,
+        cardName: toSlug(query),
+      });
       sendJson(res, 200, {
         sessionId,
         problem: { ...studentSafeProblem(card), codeSnippets: snippets },
@@ -118,11 +148,51 @@ async function handle(
     return;
   }
 
+  const runMatch = pathname.match(/^\/api\/session\/([^/]+)\/run$/);
+  if (method === 'POST' && runMatch) {
+    const sessionId = runMatch[1]!;
+    const entry = sessions.get(sessionId);
+    if (!entry) {
+      sendJson(res, 404, { error: 'session not found' });
+      return;
+    }
+    const body = (await readJsonBody(req)) as { code?: string; language?: string };
+    const code = body.code;
+    const language = body.language;
+    if (typeof code !== 'string' || !code) {
+      sendJson(res, 400, { error: 'code is required' });
+      return;
+    }
+    if (typeof language !== 'string' || !RUNNABLE.has(language)) {
+      sendJson(res, 400, { error: 'unsupported language' });
+      return;
+    }
+    try {
+      if (!entry.cases) {
+        entry.cases = await extractCases(entry.card.examples);
+      }
+      const snippets = await loadSnippets(entry.cardName);
+      const slug = LANG_SLUG[language] ?? language;
+      const scaffold = snippets.find((s) => s.langSlug === slug)?.code;
+      const result = await runStudentCode(
+        code,
+        language as 'python' | 'typescript' | 'javascript' | 'csharp',
+        entry.cases,
+        scaffold,
+      );
+      sendJson(res, 200, result);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      sendJson(res, 500, { cases: [], error: message });
+    }
+    return;
+  }
+
   const submitMatch = pathname.match(/^\/api\/session\/([^/]+)\/submit$/);
   if (method === 'POST' && submitMatch) {
     const sessionId = submitMatch[1]!;
-    const session = sessions.get(sessionId);
-    if (!session) {
+    const entry = sessions.get(sessionId);
+    if (!entry) {
       sendJson(res, 404, { error: 'session not found' });
       return;
     }
@@ -139,7 +209,7 @@ async function handle(
       Connection: 'keep-alive',
     });
     try {
-      const result = await session.submit(message, (stage) => sendEvent(res, 'stage', { stage }));
+      const result = await entry.session.submit(message, (stage) => sendEvent(res, 'stage', { stage }));
       sendEvent(res, 'result', {
         reply: result.reply,
         mode: result.mode,

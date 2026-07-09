@@ -47,16 +47,19 @@ function start(name, color, command, args, env) {
 }
 
 function killTree(p) {
-  if (!p.pid || p.killed) return
+  if (!p.pid || p.killed) return null
   if (isWin) {
-    spawn('taskkill', ['/pid', String(p.pid), '/T', '/F'], { stdio: 'ignore' })
-  } else {
-    try {
-      process.kill(-p.pid, 'SIGTERM') // negative pid = the whole process group
-    } catch {
-      try { p.kill('SIGTERM') } catch {}
-    }
+    // Return the taskkill child so shutdown can WAIT for it — exiting before
+    // taskkill finishes leaves orphaned trees holding the ports (observed:
+    // api+vite+electron all survived a close because we exited after 500ms).
+    return spawn('taskkill', ['/pid', String(p.pid), '/T', '/F'], { stdio: 'ignore' })
   }
+  try {
+    process.kill(-p.pid, 'SIGTERM') // negative pid = the whole process group
+  } catch {
+    try { p.kill('SIGTERM') } catch {}
+  }
+  return null
 }
 
 function shutdown(code = 0) {
@@ -65,8 +68,18 @@ function shutdown(code = 0) {
   process.stdout.write(
     desktopMode ? '\nshutting down api, web, and desktop…\n' : '\nshutting down both servers…\n',
   )
-  for (const p of children) killTree(p)
-  setTimeout(() => process.exit(code), 500)
+  const killers = children.map(killTree).filter(Boolean)
+  let remaining = killers.length
+  const finish = () => {
+    remaining -= 1
+    if (remaining <= 0) process.exit(code)
+  }
+  if (remaining === 0) {
+    setTimeout(() => process.exit(code), 500)
+    return
+  }
+  for (const k of killers) k.on('close', finish)
+  setTimeout(() => process.exit(code), 5000) // hard cap if taskkill wedges
 }
 
 async function waitForWeb(port, timeoutMs = 30_000) {

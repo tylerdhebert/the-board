@@ -7,3 +7,4 @@ _*.txt
 *.tmp
 logs/
 server/.lsp-scratch/
+server/.run-scratch/

@@ -107,3 +107,24 @@ export async function startSession(
     { method: 'POST', body: JSON.stringify({ query }) },
   )
 }
+
+export type RunCaseResult = {
+  display: string
+  expected: string
+  got: string
+  pass: boolean
+  error?: string
+}
+
+export type StudentRunResult = { cases: RunCaseResult[]; error?: string }
+
+export async function runExamples(
+  sessionId: string,
+  code: string,
+  language: string,
+): Promise<StudentRunResult> {
+  return request<StudentRunResult>(`/api/session/${sessionId}/run`, {
+    method: 'POST',
+    body: JSON.stringify({ code, language }),
+  })
+}

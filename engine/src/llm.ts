@@ -19,7 +19,7 @@ export interface LLMClient { complete(req: LLMRequest): Promise<string> }
 // whole process tree and fail the call so the caller can surface an error.
 const CLI_INACTIVITY_MS = Number(process.env.TUTOR_CLI_INACTIVITY_MS ?? 120_000);
 
-function killTree(pid: number): void {
+export function killTree(pid: number): void {
   if (process.platform === 'win32') {
     // codex is a 3-deep chain (shim -> node -> codex.exe + its repl runtime);
     // child.kill() would only take out the shim and orphan the rest.

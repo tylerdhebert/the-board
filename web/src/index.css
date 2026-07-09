@@ -319,6 +319,40 @@ body::before {
   color: var(--chalk-faint);
   margin: 0 0 10px;
 }
+.workactions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.runbtn {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--chalk-line);
+  color: var(--sky);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: lowercase;
+  padding: 2px 2px;
+  cursor: pointer;
+  outline: none;
+}
+.runbtn:hover:not(:disabled) { color: var(--chalk); border-bottom-color: var(--sky); }
+.runbtn:disabled { color: var(--chalk-faint); cursor: default; }
+.runresults {
+  margin-top: 10px;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.runresults .pass { color: var(--chalk-dim); }
+.runresults .pass .mark { color: var(--sky); margin-right: 8px; }
+.runresults .fail { color: var(--coral); }
+.runresults .fail .mark { margin-right: 8px; }
+.runresults .disp { letter-spacing: 0; }
+.runresults .detail { opacity: 0.9; }
 .editor-shell { position: relative; padding: 7px; }
 .editor-shell .monaco-host { height: 320px; }
 .editor-loading {

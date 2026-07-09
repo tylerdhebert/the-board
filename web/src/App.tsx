@@ -4,15 +4,18 @@ import { mdLength, parseMd, renderMd } from './md'
 import {
   createSession,
   getCards,
+  runExamples,
   startSession,
   submitTurn,
   type CardRef,
   type Problem,
+  type StudentRunResult,
   type TurnStage,
 } from './api'
 import WindowControls from './WindowControls'
 
 const LANGS = ['csharp', 'typescript', 'python', 'javascript', 'java', 'cpp', 'go'] as const
+const RUNNABLE = new Set(['python', 'typescript', 'javascript', 'csharp'])
 
 // Monaco language id -> LeetCode langSlug (for picking the starter scaffold).
 const LANG_SLUG: Record<string, string> = {
@@ -137,12 +140,22 @@ function RevealingText({
   )
 }
 
-function reviewPrompt(code: string): string {
-  return (
+function reviewPrompt(code: string, run?: StudentRunResult | null): string {
+  let prompt =
     "Here's my current code. Review it and push me one step forward — point out " +
     'what to reconsider, but do NOT give me the answer or write the fix:\n\n' +
     code
-  )
+  if (run && !run.error && run.cases.length > 0) {
+    const lines = run.cases.map((c) => {
+      const status = c.pass ? 'PASS' : 'FAIL'
+      if (c.error) return `${status} ${c.display} (${c.error})`
+      return `${status} ${c.display} (got ${c.got}, expected ${c.expected})`
+    })
+    prompt += `\n\nMy latest test run:\n${lines.join('\n')}`
+  } else if (run?.error) {
+    prompt += `\n\nMy latest test run:\nERROR ${run.error}`
+  }
+  return prompt
 }
 
 export default function App() {
@@ -161,6 +174,8 @@ export default function App() {
   const [ingesting, setIngesting] = useState(false)
   const [loadingQuery, setLoadingQuery] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [run, setRun] = useState<StudentRunResult | null>(null)
+  const [running, setRunning] = useState(false)
   const notesRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -192,6 +207,7 @@ export default function App() {
       setProblem(res.problem)
       setNotes([])
       setInput('')
+      setRun(null)
       const stub = snippetFor(res.problem, lang)
       setCode(stub)
       setSeed(stub)
@@ -245,11 +261,25 @@ export default function App() {
   function review() {
     const c = code.trim()
     if (!c || busy) return
-    void turn(reviewPrompt(c), '↳ review my work')
+    void turn(reviewPrompt(c, run), '↳ review my work')
+  }
+
+  async function runTheExamples() {
+    if (!sessionId || running || !code.trim() || !RUNNABLE.has(lang)) return
+    setRunning(true)
+    try {
+      const result = await runExamples(sessionId, code, lang)
+      setRun(result)
+    } catch (err) {
+      setRun({ cases: [], error: err instanceof Error ? err.message : String(err) })
+    } finally {
+      setRunning(false)
+    }
   }
 
   function changeLang(next: string) {
     setLang(next)
+    setRun(null)
     // Swap the scaffold only if the editor still holds the untouched stub (or is empty).
     if (code === seed || code.trim() === '') {
       const stub = snippetFor(problem, next)
@@ -325,19 +355,54 @@ export default function App() {
               <section className="workarea">
                 <div className="worklabel">
                   <span>your work</span>
-                  <select className="langpick" value={lang} onChange={(e) => changeLang(e.target.value)}>
-                    {LANGS.map((l) => (
-                      <option key={l} value={l}>
-                        {l}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="workactions">
+                    {RUNNABLE.has(lang) && sessionId && code.trim() && (
+                      <button
+                        type="button"
+                        className="runbtn"
+                        disabled={running}
+                        onClick={() => void runTheExamples()}
+                      >
+                        {running ? 'running…' : 'run the examples'}
+                      </button>
+                    )}
+                    <select className="langpick" value={lang} onChange={(e) => changeLang(e.target.value)}>
+                      {LANGS.map((l) => (
+                        <option key={l} value={l}>
+                          {l}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
                 <div className="editor-shell chalk lit">
                   <div className="monaco-host">
                     <CodeEditor value={code} onChange={setCode} language={lang} />
                   </div>
                 </div>
+                {run && (
+                  <div className="runresults">
+                    {run.error ? (
+                      <div className="fail">{run.error}</div>
+                    ) : (
+                      run.cases.map((c, i) => (
+                        <div key={i} className={c.pass ? 'pass' : 'fail'}>
+                          <span className="mark">{c.pass ? '✓' : '✗'}</span>
+                          <span className="disp">{c.display}</span>
+                          {!c.pass &&
+                            (c.error ? (
+                              <span className="detail"> → {c.error}</span>
+                            ) : (
+                              <span className="detail">
+                                {' '}
+                                → got {c.got} (want {c.expected})
+                              </span>
+                            ))}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
               </section>
             </>
           ) : (
