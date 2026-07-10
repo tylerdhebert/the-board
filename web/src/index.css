@@ -614,18 +614,26 @@ body::before {
   transform: rotate(-1.2deg);
 }
 .solved-stamp {
+  position: relative;
   font-family: var(--mono);
   font-size: 11px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--sky);
-  border: 1.5px solid var(--sky);
   padding: 3px 10px;
-  filter: url(#chalk-rough);
   transform: rotate(-8deg);
   opacity: 0.85;
   flex: 0 0 auto;
   line-height: 1.3;
+}
+/* chalk texture on the outline only — label stays crisp (same as .diff-badge) */
+.solved-stamp::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1.5px solid var(--sky);
+  filter: url(#chalk-rough);
+  pointer-events: none;
 }
 .problem h2 {
   font-family: var(--mono);
