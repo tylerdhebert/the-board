@@ -1,8 +1,12 @@
 import http from 'node:http';
 import { randomUUID } from 'node:crypto';
+import { mkdirSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { URL } from 'node:url';
 import {
   DEFAULT_MODELS,
+  JsonlTracer,
   TutorSession,
   extractCases,
   getOrIngestCard,
@@ -17,6 +21,8 @@ import {
 } from './engine.js';
 import { attachLspBridge, lspInfo } from './lsp.js';
 import {
+  deleteSessions,
+  isEmptySession,
   listSessions,
   loadSession,
   saveSession,
@@ -24,6 +30,32 @@ import {
 } from './sessionStore.js';
 
 const PORT = Number(process.env.PORT ?? 8787);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(__dirname, '../..');
+const logsDir = path.join(repoRoot, 'logs');
+mkdirSync(logsDir, { recursive: true });
+
+function sessionTracer(sessionId: string): JsonlTracer {
+  return new JsonlTracer(path.join(logsDir, `${sessionId}.jsonl`));
+}
+
+function firstStudentNote(s: PersistedSession): string {
+  const note = s.notes.find((n) => n.role === 'student');
+  if (!note) return '';
+  const text = note.text;
+  return text.length > 80 ? text.slice(0, 80) : text;
+}
+
+async function pruneEmptySessions(): Promise<void> {
+  const all = await listSessions();
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  const stale = all.filter(
+    (s) => isEmptySession(s) && Date.parse(s.updatedAt) < cutoff,
+  );
+  if (stale.length === 0) return;
+  deleteSessions(stale.map((s) => s.id));
+  console.log(`pruned ${stale.length} empty session(s)`);
+}
 
 type SessionEntry = {
   session: TutorSession;
@@ -77,7 +109,9 @@ async function readJsonBody(req: http.IncomingMessage): Promise<unknown> {
 async function newEntry(card: ProblemCard, cardName: string): Promise<SessionEntry> {
   const sessionId = randomUUID();
   const now = new Date().toISOString();
-  const session = new TutorSession(card, DEFAULT_MODELS);
+  const session = new TutorSession(card, DEFAULT_MODELS, {
+    tracer: sessionTracer(sessionId),
+  });
   const persisted: PersistedSession = {
     id: sessionId,
     cardName,
@@ -110,6 +144,7 @@ async function getOrRestore(id: string): Promise<SessionEntry | null> {
     const card = await loadCard(persisted.cardName);
     const session = new TutorSession(card, DEFAULT_MODELS, {
       restore: persisted.engine,
+      tracer: sessionTracer(id),
     });
     const entry: SessionEntry = {
       session,
@@ -153,6 +188,7 @@ async function handle(
     const allSessions = await listSessions();
     const byCard = new Map<string, PersistedSession[]>();
     for (const s of allSessions) {
+      if (isEmptySession(s)) continue;
       const list = byCard.get(s.cardName) ?? [];
       list.push(s);
       byCard.set(s.cardName, list);
@@ -161,7 +197,14 @@ async function handle(
       name: string;
       title: string;
       status: 'new' | 'attempted' | 'solved';
-      sessions: { id: string; startedAt: string; updatedAt: string; turns: number; solved: boolean }[];
+      sessions: {
+        id: string;
+        startedAt: string;
+        updatedAt: string;
+        turns: number;
+        solved: boolean;
+        first: string;
+      }[];
       latestUpdatedAt: string | null;
     };
     const rows: ProblemRow[] = [];
@@ -183,6 +226,7 @@ async function handle(
           updatedAt: s.updatedAt,
           turns: s.engine.turnCounter,
           solved: s.solved,
+          first: firstStudentNote(s),
         })),
         latestUpdatedAt: sess[0]?.updatedAt ?? null,
       });
@@ -421,5 +465,9 @@ const server = http.createServer((req, res) => {
 attachLspBridge(server);
 
 server.listen(PORT, () => {
-  console.log(`tutor server on http://localhost:${PORT}`);
+  void pruneEmptySessions()
+    .catch((err) => console.warn('prune failed', err))
+    .finally(() => {
+      console.log(`tutor server on http://localhost:${PORT}`);
+    });
 });

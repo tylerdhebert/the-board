@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import Editor, { type OnMount } from '@monaco-editor/react'
-import { startCsharpLsp } from './lsp/csharpLsp'
+import { startCsharpLsp, type CsharpLspHandle } from './lsp/csharpLsp'
 
 type Props = {
   value: string
@@ -14,21 +14,20 @@ const THEME = 'chalkboard'
 export default function CodeEditor({ value, onChange, language }: Props) {
   const monacoRef = useRef<Parameters<OnMount>[1] | null>(null)
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null)
-  const lspRef = useRef<{ dispose(): void } | null>(null)
+  const lspRef = useRef<CsharpLspHandle | null>(null)
   const languageRef = useRef(language)
   languageRef.current = language
   const genRef = useRef(0)
 
-  const stopLsp = () => {
-    lspRef.current?.dispose()
-    lspRef.current = null
-  }
-
-  const startLspIfCsharp = () => {
+  const ensureLsp = () => {
     const monaco = monacoRef.current
     const editor = editorRef.current
-    stopLsp()
-    if (languageRef.current !== 'csharp' || !monaco || !editor) return
+    if (!monaco || !editor) return
+    if (lspRef.current) {
+      lspRef.current.setActive(languageRef.current === 'csharp')
+      return
+    }
+    if (languageRef.current !== 'csharp') return
     const gen = ++genRef.current
     void startCsharpLsp(monaco, editor).then((session) => {
       if (gen !== genRef.current) {
@@ -36,6 +35,7 @@ export default function CodeEditor({ value, onChange, language }: Props) {
         return
       }
       lspRef.current = session
+      session.setActive(languageRef.current === 'csharp')
     })
   }
 
@@ -67,16 +67,20 @@ export default function CodeEditor({ value, onChange, language }: Props) {
     monaco.editor.setTheme(THEME)
     editorRef.current = editor
     monacoRef.current = monaco
-    startLspIfCsharp()
+    ensureLsp()
   }
 
   useEffect(() => {
-    startLspIfCsharp()
+    ensureLsp()
+  }, [language])
+
+  useEffect(() => {
     return () => {
       genRef.current += 1
-      stopLsp()
+      lspRef.current?.dispose()
+      lspRef.current = null
     }
-  }, [language])
+  }, [])
 
   return (
     <Editor

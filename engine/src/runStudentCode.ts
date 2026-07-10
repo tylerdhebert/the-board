@@ -199,6 +199,16 @@ function toRunResult(cases: CaseSpec[], payload: HarnessPayload): StudentRunResu
         error: r.error,
       };
     }
+    if ((r.got === null || r.got === undefined) && c.expected !== null) {
+      return {
+        display: c.display,
+        expected: expectedStr,
+        got: 'null',
+        pass: false,
+        error:
+          "got nothing back — did you return the result? (in-place/mutation problems aren't supported yet)",
+      };
+    }
     const pass = compareGot(r.got, c.expected);
     return {
       display: c.display,

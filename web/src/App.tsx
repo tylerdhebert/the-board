@@ -584,6 +584,7 @@ export default function App() {
                                   {shortDate(s.updatedAt)} · {s.turns} turn{s.turns === 1 ? '' : 's'}
                                   {s.solved ? ' · ✓' : ''}
                                 </span>
+                                {s.first ? <span className="sess-first">{s.first}</span> : null}
                                 <button
                                   type="button"
                                   className="sess-action"

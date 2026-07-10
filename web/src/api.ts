@@ -19,6 +19,7 @@ export interface ProblemSessionRef {
   updatedAt: string
   turns: number
   solved: boolean
+  first: string
 }
 
 export interface ProblemSummary {

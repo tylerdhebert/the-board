@@ -113,11 +113,16 @@ function hoverContentsToMarkdown(
   return [{ value: contents.value }]
 }
 
+export type CsharpLspHandle = {
+  setActive(active: boolean): void
+  dispose(): void
+}
+
 export async function startCsharpLsp(
   monaco: Monaco,
   editor: Editor,
-): Promise<{ dispose(): void }> {
-  const noop = { dispose() {} }
+): Promise<CsharpLspHandle> {
+  const noop: CsharpLspHandle = { setActive() {}, dispose() {} }
 
   let info: { rootUri: string; fileUri: string }
   try {
@@ -148,6 +153,7 @@ export async function startCsharpLsp(
 
   const { rootUri, fileUri } = info
   let version = 1
+  let active = true
   let debounceTimer: ReturnType<typeof setTimeout> | null = null
   const disposables: Disposable[] = []
 
@@ -212,7 +218,7 @@ export async function startCsharpLsp(
       clearTimeout(loadFallbackTimer)
       loadFallbackTimer = null
     }
-    flushChange()
+    if (active) flushChange()
   }
   unsubProgress = rpc.onNotification('$/progress', (params) => {
     const kind = (params as { value?: { kind?: string } } | undefined)?.value?.kind
@@ -231,6 +237,7 @@ export async function startCsharpLsp(
 
   disposables.push(
     model.onDidChangeContent(() => {
+      if (!active) return
       if (debounceTimer != null) clearTimeout(debounceTimer)
       debounceTimer = setTimeout(flushChange, 250)
     }),
@@ -345,6 +352,7 @@ export async function startCsharpLsp(
   )
 
   const unsubDiag = rpc.onNotification('textDocument/publishDiagnostics', (params) => {
+    if (!active) return
     const p = params as {
       uri?: string
       diagnostics?: Array<{
@@ -374,6 +382,21 @@ export async function startCsharpLsp(
   })
 
   return {
+    setActive(next: boolean) {
+      if (next === active) return
+      active = next
+      if (!active) {
+        if (debounceTimer != null) {
+          clearTimeout(debounceTimer)
+          debounceTimer = null
+        }
+        monaco.editor.setModelMarkers(model, 'csharp-ls', [])
+        return
+      }
+      // Re-entering csharp: push one full didChange immediately, then resume
+      // normal debounced sync via onDidChangeContent.
+      flushChange()
+    },
     dispose() {
       if (debounceTimer != null) clearTimeout(debounceTimer)
       if (loadFallbackTimer != null) clearTimeout(loadFallbackTimer)

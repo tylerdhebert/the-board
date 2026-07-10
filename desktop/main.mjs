@@ -1,11 +1,15 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, screen } from 'electron'
 import { createHash } from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { boundsOnScreen, loadWindowState, saveWindowState } from './windowState.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.join(__dirname, '..')
+const WINDOW_STATE_PATH = path.join(__dirname, '.window-state.json')
+
+const DEFAULT_BOUNDS = { width: 1600, height: 1000 }
 
 app.commandLine.appendSwitch(
   'remote-debugging-port',
@@ -18,6 +22,9 @@ app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion')
 
 const smoke = process.argv.includes('--smoke')
 let win = null
+let saveTimer = null
+/** Last non-maximized bounds while the window is alive. */
+let lastNormal = { ...DEFAULT_BOUNDS }
 
 function pad2(n) {
   return String(n).padStart(2, '0')
@@ -36,6 +43,38 @@ function sendMaximized() {
   win.webContents.send('win:maximized-changed', win.isMaximized())
 }
 
+function rememberNormalBounds() {
+  if (!win || win.isDestroyed() || win.isMaximized()) return
+  const b = win.getBounds()
+  lastNormal = { x: b.x, y: b.y, width: b.width, height: b.height }
+}
+
+function persistWindowState() {
+  if (!win || win.isDestroyed()) return
+  rememberNormalBounds()
+  const maximized = win.isMaximized()
+  const state = {
+    maximized,
+    x: lastNormal.x,
+    y: lastNormal.y,
+    width: lastNormal.width,
+    height: lastNormal.height,
+  }
+  try {
+    saveWindowState(state, WINDOW_STATE_PATH)
+  } catch {
+    /* best-effort */
+  }
+}
+
+function schedulePersist() {
+  if (saveTimer != null) clearTimeout(saveTimer)
+  saveTimer = setTimeout(() => {
+    saveTimer = null
+    if (win && !win.isDestroyed() && !win.isMaximized()) persistWindowState()
+  }, 500)
+}
+
 ipcMain.on('win:minimize', () => {
   win?.minimize()
 })
@@ -46,8 +85,12 @@ ipcMain.on('win:close', () => {
 
 ipcMain.on('win:toggle-maximize', () => {
   if (!win) return
-  if (win.isMaximized()) win.unmaximize()
-  else win.maximize()
+  if (win.isMaximized()) {
+    win.unmaximize()
+  } else {
+    rememberNormalBounds()
+    win.maximize()
+  }
 })
 
 ipcMain.handle('win:is-maximized', () => win?.isMaximized() ?? false)
@@ -71,11 +114,12 @@ ipcMain.handle('debug:capture', async (_event, opts = {}) => {
 })
 
 function createWindow() {
-  win = new BrowserWindow({
+  const saved = loadWindowState(WINDOW_STATE_PATH)
+  const opts = {
     frame: false,
     backgroundColor: '#16241d',
-    width: 1600,
-    height: 1000,
+    width: DEFAULT_BOUNDS.width,
+    height: DEFAULT_BOUNDS.height,
     minWidth: 1100,
     minHeight: 700,
     webPreferences: {
@@ -84,10 +128,50 @@ function createWindow() {
       nodeIntegration: false,
       backgroundThrottling: false,
     },
-  })
+  }
+  if (saved) {
+    opts.width = saved.width
+    opts.height = saved.height
+    lastNormal = {
+      width: saved.width,
+      height: saved.height,
+      ...(saved.x != null ? { x: saved.x } : {}),
+      ...(saved.y != null ? { y: saved.y } : {}),
+    }
+    if (
+      saved.x != null &&
+      saved.y != null &&
+      boundsOnScreen(
+        { x: saved.x, y: saved.y, width: saved.width, height: saved.height },
+        screen.getAllDisplays(),
+      )
+    ) {
+      opts.x = saved.x
+      opts.y = saved.y
+    }
+  }
 
-  win.on('maximize', sendMaximized)
-  win.on('unmaximize', sendMaximized)
+  win = new BrowserWindow(opts)
+  rememberNormalBounds()
+
+  win.on('maximize', () => {
+    // Capture normal bounds before Electron reports maximized (already too late
+    // for getBounds — use lastNormal remembered on prior resize/move).
+    sendMaximized()
+    persistWindowState()
+  })
+  win.on('unmaximize', () => {
+    sendMaximized()
+    persistWindowState()
+  })
+  win.on('resize', () => {
+    rememberNormalBounds()
+    schedulePersist()
+  })
+  win.on('move', () => {
+    rememberNormalBounds()
+    schedulePersist()
+  })
 
   win.webContents.on('before-input-event', (event, input) => {
     if (input.control && input.shift && input.key.toLowerCase() === 'd') {
@@ -99,6 +183,8 @@ function createWindow() {
   if (process.env.TUTOR_OPEN_DEVTOOLS === '1') {
     win.webContents.openDevTools({ mode: 'detach' })
   }
+
+  if (saved?.maximized) win.maximize()
 
   void win.loadURL(process.env.TUTOR_WEB_URL ?? 'http://localhost:5173')
 }

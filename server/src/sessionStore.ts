@@ -6,7 +6,9 @@ import type { Message, StudentRunResult } from './engine.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '../..');
-const dbPath = path.join(repoRoot, 'tutor.db');
+const dbPath = process.env.TUTOR_DB_PATH
+  ? path.resolve(process.env.TUTOR_DB_PATH)
+  : path.join(repoRoot, 'tutor.db');
 const sessionsDir = path.join(repoRoot, 'sessions');
 const migratedDir = path.join(repoRoot, 'sessions.migrated');
 
@@ -286,4 +288,23 @@ export async function listSessions(): Promise<PersistedSession[]> {
   const database = getDb();
   const rows = database.prepare('SELECT * FROM sessions').all() as SessionRow[];
   return rows.map((row) => rowToSession(row, loadNotes(database, row.id)));
+}
+
+export function deleteSessions(ids: string[]): void {
+  if (ids.length === 0) return;
+  const database = getDb();
+  database.exec('BEGIN');
+  try {
+    const del = database.prepare('DELETE FROM sessions WHERE id = ?');
+    for (const id of ids) del.run(id);
+    database.exec('COMMIT');
+  } catch (err) {
+    database.exec('ROLLBACK');
+    throw err;
+  }
+}
+
+/** Empty = never started: no turns, unsolved, blank code. */
+export function isEmptySession(s: PersistedSession): boolean {
+  return s.engine.turnCounter === 0 && !s.solved && s.code === '';
 }

@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   CodexCliClient,
+  JsonlTracer,
   TutorSession,
   fetchProblem,
   slugFromUrl,
@@ -15,7 +16,7 @@ import { ingest } from '../../engine/src/ingest.js';
 import { extractCases, type CaseSpec } from '../../engine/src/exampleCases.js';
 import { runStudentCode, type StudentRunResult } from '../../engine/src/runStudentCode.js';
 
-export { TutorSession, extractCases, runStudentCode };
+export { TutorSession, extractCases, runStudentCode, JsonlTracer };
 export type { CodeSnippet, Message, ProblemCard, SessionModels, CaseSpec, StudentRunResult };
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
