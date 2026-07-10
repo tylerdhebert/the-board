@@ -659,7 +659,7 @@ body::before {
   white-space: pre-wrap;
 }
 
-/* vocabulary — chalk-framed board section with multi-column terms */
+/* vocabulary — mounted blackboard: wood frame, slate surface, chalk rail */
 .problem.has-vocab {
   display: grid;
   grid-template-columns: minmax(0, 700px) minmax(280px, 1fr);
@@ -679,20 +679,30 @@ body::before {
 }
 .vocab {
   position: relative;
-  padding: 20px 18px 16px;
-  background: rgba(16, 26, 21, 0.4);
+  padding: 11px 11px 0;
+  background:
+    repeating-linear-gradient(92deg, rgba(0,0,0,0.10) 0 2px, transparent 2px 7px),
+    linear-gradient(180deg, #6b573c, #57452f 30%, #4a3a26 100%);
+  border: 1px solid #41341f;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.10),
+    inset 0 -1px 0 rgba(0,0,0,0.35),
+    0 8px 22px rgba(0,0,0,0.35);
+}
+.vocab-surface {
+  min-height: 170px;
+  padding: 14px 16px 16px;
+  background:
+    radial-gradient(ellipse 75% 60% at 30% 35%, rgba(236,230,214,0.045), transparent 70%),
+    #14211a;
+  box-shadow: inset 0 1px 4px rgba(0,0,0,0.4);
 }
 .vocab-head {
-  position: absolute;
-  top: -11px;
-  left: 12px;
+  position: relative;
   display: flex;
-  flex-direction: row;
   align-items: center;
   gap: 8px;
-  background: var(--slate);
-  padding: 0 8px;
-  z-index: 1;
+  margin: 0 0 12px;
 }
 .vocab-title {
   font-family: var(--display);
@@ -754,6 +764,27 @@ body::before {
 .vocab-info:hover + .vocab-tip,
 .vocab-info:focus-visible + .vocab-tip {
   opacity: 1;
+}
+.vocab-rail {
+  position: relative;
+  height: 9px;
+  margin: 0 -1px;
+  background: linear-gradient(180deg, #8a938c 0%, #5c655e 45%, #454e48 100%);
+  border-top: 1px solid #2c332e;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.28),
+    0 2px 4px rgba(0,0,0,0.4);
+}
+.vocab-chalkpiece {
+  position: absolute;
+  top: -6px;
+  right: 14%;
+  width: 30px;
+  height: 6px;
+  background: linear-gradient(180deg, #f4efe1, #d9d3c2);
+  border-radius: 2px;
+  transform: rotate(-1.5deg);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.45);
 }
 .vocab-words {
   column-width: 150px;
