@@ -1,7 +1,7 @@
 {
   "title": "Valid Parentheses",
   "statement": "Given a string containing only bracket characters, decide whether every opening bracket is closed by the same kind of bracket, closures happen in the correct nested order, and no closing bracket appears without a matching opener.",
-  "constraints": "1 <= len(s) <= 10000. Characters are only one of '(', ')', '{', '}', '[' and ']'. An O(n^2) brute force can pass small inputs but the intended solution should be O(n).",
+  "constraints": "1 <= len(s) <= 10000. Characters are only one of '(', ')', '{', '}', '[' and ']'.",
   "brute_force": {
     "approach": "Repeatedly delete any adjacent matched pair: '()', '[]', or '{}'. Each deletion resolves one innermost valid pair. Keep scanning/replacing until a full pass makes no change. The string is valid exactly when everything has been deleted.",
     "time": "O(n^2), because each replacement pass may scan the whole string and can remove only a small number of pairs.",

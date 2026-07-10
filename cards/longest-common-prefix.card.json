@@ -1,7 +1,7 @@
 {
   "title": "Longest Common Prefix",
   "statement": "Given a non-empty list of lowercase strings, return the longest string that appears at the start of every string in the list. If they share no starting characters, return an empty string.",
-  "constraints": "1 <= len(strs) <= 200; 0 <= len(strs[i]) <= 200; each non-empty string contains only lowercase English letters. These bounds allow simple O(n*m) scans, where n is the number of strings and m is the shortest or first string length.",
+  "constraints": "1 <= len(strs) <= 200; 0 <= len(strs[i]) <= 200; each non-empty string contains only lowercase English letters.",
   "brute_force": {
     "approach": "Use the first string as the source of possible answers. Try its prefixes from longest to shortest, and for each candidate prefix, check whether every string starts with it. The first candidate that passes is the answer; if none pass, return the empty string.",
     "time": "O(n*m^2) in the worst case, where n is the number of strings and m is the length of the first string, because many candidate prefixes may be checked against many strings.",

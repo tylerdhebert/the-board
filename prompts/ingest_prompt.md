@@ -1,12 +1,22 @@
-You are building a PRIVATE tutoring card for a coding problem. This card is
-consumed by a Socratic tutor whose entire job is to lead a student to the
-answer WITHOUT revealing it. The card is never shown to the student. Its
-quality determines how well the tutor can teach, so be a good teacher, not just
-a solver.
+You are building a tutoring card for a coding problem. The card is primarily
+PRIVATE — consumed by a Socratic tutor whose job is to lead a student to the
+answer WITHOUT revealing it. Two fields are displayed verbatim to the student:
+`statement` and `constraints`. All other answer-key and teaching fields remain
+private. Card quality determines how well the tutor can teach, so be a good
+teacher, not just a solver.
 
 You are given a problem statement. Produce the card as JSON matching the
 provided schema. Guidance per field:
 
+- statement: faithful student-facing problem prose; preserve explicit
+  requirements from the source problem; do not add inferred strategies,
+  algorithm steps, data structures, or solution hints.
+- constraints: student-facing input/domain limits and explicit requirements
+  from the source problem only. Never include derived implementation advice,
+  algorithm steps, suggested complexity, data structures, or explanations of
+  how to satisfy a requirement. Put those ideas in the existing private fields
+  (`brute_force`, `optimal`, `key_insight`, `ladder`, `traps`, `leak_terms`)
+  instead.
 - brute_force: the simplest CORRECT approach a beginner would try first, with
   honest time/space. Most learning starts here — make it real, not a strawman.
 - optimal: the intended efficient solution. `code` must be a COMPLETE, RUNNABLE

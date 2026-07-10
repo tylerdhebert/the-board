@@ -4,8 +4,8 @@
   "required": ["title", "statement", "constraints", "brute_force", "optimal", "key_insight", "ladder", "traps", "leak_terms", "underlying_primitive", "examples"],
   "properties": {
     "title": { "type": "string" },
-    "statement": { "type": "string", "description": "The problem statement in plain prose." },
-    "constraints": { "type": "string", "description": "Input sizes / value ranges that determine which complexities pass." },
+    "statement": { "type": "string", "description": "Student-visible verbatim problem prose. Preserve explicit requirements from the source; do not add inferred strategies, algorithm steps, data structures, or solution hints." },
+    "constraints": { "type": "string", "description": "Student-visible verbatim input/domain limits and explicit source requirements only. Never include derived implementation advice, algorithm steps, suggested complexity, data structures, or how-to-satisfy explanations." },
     "brute_force": {
       "type": "object",
       "additionalProperties": false,

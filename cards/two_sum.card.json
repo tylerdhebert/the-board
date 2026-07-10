@@ -1,7 +1,7 @@
 {
   "title": "Two Sum",
   "statement": "Given a list of integers nums and an integer target, return the indices of the two distinct elements whose values add up to target. Exactly one valid pair exists, and the two indices may be returned in any order.",
-  "constraints": "2 <= len(nums) <= 10^4; -10^9 <= nums[i] <= 10^9; exactly one valid answer exists; the same element cannot be used twice. An O(n^2) solution may be too slow at the upper bound, while O(n) is intended.",
+  "constraints": "2 <= len(nums) <= 10^4; -10^9 <= nums[i] <= 10^9; exactly one valid answer exists; the same element cannot be used twice.",
   "brute_force": {
     "approach": "Try every pair of different positions. For each i, check every later j and return [i, j] as soon as nums[i] + nums[j] equals target. This is simple and correct because it directly tests all possible pairs without reusing an element.",
     "time": "O(n^2)",

@@ -1,7 +1,7 @@
 {
   "title": "Same Tree",
   "statement": "Given the roots of two binary trees, determine whether the trees have exactly the same shape and the same value at every corresponding node.",
-  "constraints": "Each tree has 0 to 100 nodes. Node values are integers from -10^4 to 10^4. An O(n) traversal is sufficient.",
+  "constraints": "Each tree has 0 to 100 nodes. Node values are integers from -10^4 to 10^4.",
   "brute_force": {
     "approach": "Serialize both trees into lists that include node values and explicit markers for missing children, then compare the two serialized lists. The missing-child markers are necessary because values alone do not capture structure.",
     "time": "O(n + m), where n and m are the numbers of nodes in the two trees.",

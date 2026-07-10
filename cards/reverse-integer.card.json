@@ -1,7 +1,7 @@
 {
   "title": "Reverse Integer",
   "statement": "Given a signed 32-bit integer x, return the integer formed by reversing its decimal digits. Preserve the sign. If the reversed value would be outside the signed 32-bit range [-2^31, 2^31 - 1], return 0. The solution must avoid storing a 64-bit intermediate value.",
-  "constraints": "x is in the signed 32-bit range: -2^31 <= x <= 2^31 - 1. Because 64-bit integers are unavailable, the algorithm must detect overflow before doing a multiply-by-10-and-add step that could exceed 32-bit bounds.",
+  "constraints": "x is in the signed 32-bit range: -2^31 <= x <= 2^31 - 1. If the reversed value would be outside that range, return 0. 64-bit intermediate values are unavailable.",
   "brute_force": {
     "approach": "Convert x to a string, peel off a leading '-' if present, reverse the remaining characters, parse the result back to an integer with the original sign, then check whether it is inside the 32-bit signed range. This is simple and correct in languages where parsing the reversed string cannot overflow first, but it violates the spirit of the no-64-bit-intermediate constraint in many environments.",
     "time": "O(d), where d is the number of decimal digits",
