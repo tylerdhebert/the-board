@@ -201,14 +201,24 @@ restart 8787 to pick it up (tsx isn't in watch mode). Web changes hot-reload.
      impl written by the OTHER configured backend, verified on base
      examples; stress inputs must agree between brute and optimal or drop);
      generated input-constraint validator (failure direction = drop).
-     HARD RULES: (1) stress NEVER gates solved — SOLVED = official examples
-     only; stress shown separately (`examples 3/3 · stress 4/6`), rows
-     visually distinct; (2) every stress row has a one-click ✕ = "this case
-     is wrong, remove from card permanently" — the user is the court of
-     appeal; (3) multiple-valid-answer problems (statement says "any", or
-     brute/optimal disagree repeatedly) → generation REFUSES with an honest
-     message; dropped > wrong, always. Persist `stress: [{input, output}]`
-     on the card; "chalk up tougher cases" button (~40s once, cached).
+     HARD RULES (revised AGAIN 07-10 — user rejected student-deletes-case
+     too; authority hierarchy is EXECUTION > TUTOR > STUDENT, the student
+     never holds the eraser): (1) stress NEVER gates solved — SOLVED =
+     official examples only; stress shown separately, rows visually
+     distinct; (2) cases ship only on UNANIMOUS 3-way agreement at birth
+     (optimal + brute + a third impl from the OTHER provider); (3) student
+     affordance is DISPUTE, not delete: dispute → re-adjudication by
+     execution (fresh independent impl, run all against the input) — any
+     disagreement → the BOARD retracts the case itself with receipts; (4)
+     unanimous against the student → the dispute becomes a tutor turn
+     ("student disputes case X, their output Y vs Z — examine
+     socratically"; pairs with Round B editor access) — the best teaching
+     moment in the app; (5) the TUTOR may retract a case mid-conversation
+     if it concludes the board is wrong ("my mistake — the board was wrong
+     about this one") — teacher admits error, student never erases; (6)
+     multiple-valid-answer problems → generation REFUSES honestly. Persist
+     `stress: [{input, output}]` on the card; "chalk up tougher cases"
+     button (~40s once, cached).
    - **Round D (the fun — DISCUSS with user before building):**
      (1) concept board: locked leak-terms rendered as chalk smears/erased
      words in the dead zone right of the statement; earning a term writes
