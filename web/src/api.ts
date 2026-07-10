@@ -60,6 +60,8 @@ export type PersistedTake = {
   results: StudentRunResult | null
 }
 
+export type Vocab = { lockedCount: number; earned: string[] }
+
 export interface ResumePayload {
   sessionId: string
   cardName: string
@@ -69,6 +71,7 @@ export interface ResumePayload {
   lang: string
   takes: PersistedTake[]
   solved: boolean
+  vocab: Vocab
 }
 
 export interface TurnResult {
@@ -117,8 +120,8 @@ export async function saveEditor(id: string, code: string, lang: string): Promis
 
 export async function createSession(
   cardName: string,
-): Promise<{ sessionId: string; problem: Problem }> {
-  return request<{ sessionId: string; problem: Problem }>('/api/session', {
+): Promise<{ sessionId: string; problem: Problem; vocab: Vocab }> {
+  return request<{ sessionId: string; problem: Problem; vocab: Vocab }>('/api/session', {
     method: 'POST',
     body: JSON.stringify({ cardName }),
   })
@@ -178,8 +181,8 @@ export async function submitTurn(
 // + ingests it on the fly (slow on a cache miss).
 export async function startSession(
   query: string,
-): Promise<{ sessionId: string; problem: Problem; cached?: boolean }> {
-  return request<{ sessionId: string; problem: Problem; cached?: boolean }>(
+): Promise<{ sessionId: string; problem: Problem; vocab: Vocab; cached?: boolean }> {
+  return request<{ sessionId: string; problem: Problem; vocab: Vocab; cached?: boolean }>(
     '/api/start',
     { method: 'POST', body: JSON.stringify({ query }) },
   )

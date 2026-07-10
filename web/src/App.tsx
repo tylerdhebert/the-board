@@ -27,6 +27,7 @@ import {
   type RunCaseResult,
   type StudentRunResult,
   type TurnStage,
+  type Vocab,
 } from './api'
 import WindowControls from './WindowControls'
 
@@ -277,6 +278,12 @@ function statusMark(status: ProblemSummary['status']): { mark: string; className
   return { mark: '·', className: 'mark-new' }
 }
 
+/** Stable smear widths from slot index only — never from the real term. */
+function smearWidth(i: number): number {
+  const w = [64, 88, 52, 76, 96, 58, 70, 82]
+  return w[i % w.length]!
+}
+
 export default function App() {
   const [problems, setProblems] = useState<ProblemSummary[]>([])
   const [expanded, setExpanded] = useState<string | null>(null)
@@ -300,6 +307,8 @@ export default function App() {
   const [stressing, setStressing] = useState(false)
   const [attemptsCollapsed, setAttemptsCollapsed] = useState(false)
   const [sessionSolved, setSessionSolved] = useState(false)
+  const [vocab, setVocab] = useState<Vocab | null>(null)
+  const [fresh, setFresh] = useState<Set<string>>(() => new Set())
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsModels, setSettingsModels] = useState<AppSettingsModels | null>(null)
   const [settingsBackends, setSettingsBackends] = useState<string[]>([])
@@ -535,7 +544,7 @@ export default function App() {
   const solved =
     sessionSolved || takes.some(takeAllPass)
 
-  function applyFreshSession(res: { sessionId: string; problem: Problem }) {
+  function applyFreshSession(res: { sessionId: string; problem: Problem; vocab: Vocab }) {
     setSessionId(res.sessionId)
     setProblem(res.problem)
     setNotes([])
@@ -544,6 +553,8 @@ export default function App() {
     applyTakes([])
     setSessionSolved(false)
     setAttemptsCollapsed(false)
+    setVocab(res.vocab)
+    setFresh(new Set())
     const stub = snippetFor(res.problem, lang)
     setCode(stub)
     setSeed(stub)
@@ -595,6 +606,8 @@ export default function App() {
       applyTakes(res.takes)
       setSessionSolved(res.solved || res.takes.some(takeAllPass))
       setAttemptsCollapsed(false)
+      setVocab(res.vocab)
+      setFresh(new Set())
       setInput('')
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -658,7 +671,28 @@ export default function App() {
   }
 
   function finishReveal(index: number) {
+    const unlocked = notes[index]?.unlocked
     setNotes((p) => p.map((n, i) => (i === index ? { ...n, revealing: false } : n)))
+    if (!unlocked?.length || !vocab) return
+    const already = new Set(vocab.earned)
+    const appended = unlocked.filter((t) => !already.has(t))
+    if (appended.length === 0) return
+    setVocab({
+      earned: [...vocab.earned, ...appended],
+      lockedCount: Math.max(0, vocab.lockedCount - appended.length),
+    })
+    setFresh((prev) => {
+      const next = new Set(prev)
+      for (const t of appended) next.add(t)
+      return next
+    })
+    window.setTimeout(() => {
+      setFresh((prev) => {
+        const next = new Set(prev)
+        for (const t of appended) next.delete(t)
+        return next
+      })
+    }, 1200)
   }
 
   function send() {
@@ -780,6 +814,9 @@ export default function App() {
 
   const inDesktop = typeof window !== 'undefined' && Boolean(window.tutorDesktop)
 
+  const showVocab =
+    vocab != null && (vocab.lockedCount > 0 || vocab.earned.length > 0)
+
   return (
     <div className={inDesktop ? 'board in-desktop' : 'board'}>
       {/* chalk filter — displaces only the border layers, giving a hand-drawn edge */}
@@ -808,6 +845,8 @@ export default function App() {
             setNotes([])
             applyTakes([])
             setSessionSolved(false)
+            setVocab(null)
+            setFresh(new Set())
             setInput('')
             setError(null)
             setExpanded(null)
@@ -898,7 +937,7 @@ export default function App() {
             <LoadingBoard query={loadingQuery} ingesting={ingesting} />
           ) : problem ? (
             <>
-              <article className="problem">
+              <article className={showVocab ? 'problem has-vocab' : 'problem'}>
                 <p className="eyebrow">the problem</p>
                 <div className="problem-title-row">
                   <h1>{problem.title}</h1>
@@ -915,6 +954,19 @@ export default function App() {
                 <p className="statement">{problem.statement}</p>
                 <h2>constraints</h2>
                 <p className="constraints">{problem.constraints}</p>
+                {showVocab && vocab && (
+                  <aside className="vocab" aria-label="the vocabulary">
+                    <p className="eyebrow">the vocabulary</p>
+                    <div className="vocab-words">
+                      {vocab.earned.map((t) => (
+                        <span key={t} className={`vocab-word${fresh.has(t) ? ' fresh' : ''}`}>{t}</span>
+                      ))}
+                      {Array.from({ length: vocab.lockedCount }, (_, i) => (
+                        <span key={`s${i}`} className="vocab-smear" style={{ width: smearWidth(i) }} aria-hidden="true" />
+                      ))}
+                    </div>
+                  </aside>
+                )}
               </article>
               <section className="workarea">
                 <div className="worklabel">

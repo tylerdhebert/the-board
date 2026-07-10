@@ -99,6 +99,15 @@ type SessionEntry = {
 
 const sessions = new Map<string, SessionEntry>();
 
+/** Student-safe vocab snapshot — locked term text never leaves the server. */
+function vocabFor(entry: SessionEntry): { lockedCount: number; earned: string[] } {
+  const locked = new Set(entry.session.lockedTerms);
+  return {
+    lockedCount: locked.size,
+    earned: entry.card.leak_terms.filter((t) => !locked.has(t)),
+  };
+}
+
 /** Per-session in-flight stress generation — concurrent clicks share one promise. */
 const stressInflight = new Map<string, Promise<{ count: number }>>();
 
@@ -362,6 +371,7 @@ async function handle(
       sendJson(res, 200, {
         sessionId: entry.persisted.id,
         problem: { ...studentSafeProblem(card), codeSnippets: await loadSnippets(cardName) },
+        vocab: vocabFor(entry),
       });
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
@@ -393,6 +403,7 @@ async function handle(
         sessionId: entry.persisted.id,
         problem: { ...studentSafeProblem(card), codeSnippets: snippets },
         cached,
+        vocab: vocabFor(entry),
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -442,6 +453,7 @@ async function handle(
       lang: entry.persisted.lang,
       takes: entry.persisted.takes,
       solved: entry.persisted.solved,
+      vocab: vocabFor(entry),
     });
     return;
   }

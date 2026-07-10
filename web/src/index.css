@@ -659,6 +659,93 @@ body::before {
   white-space: pre-wrap;
 }
 
+/* vocabulary — earned words + locked chalk smears in the dead zone */
+.problem.has-vocab {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(160px, 24%, 250px);
+  column-gap: 28px;
+  max-width: min(100%, 980px);
+}
+.problem.has-vocab > .eyebrow,
+.problem.has-vocab > .problem-title-row {
+  grid-column: 1 / -1;
+}
+.problem.has-vocab > h2,
+.problem.has-vocab > .statement,
+.problem.has-vocab > .constraints {
+  grid-column: 1;
+}
+.problem.has-vocab > .vocab {
+  grid-column: 2;
+  grid-row: 3 / -1;
+  align-self: start;
+}
+.vocab .eyebrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--chalk-faint);
+  margin: 0 0 10px;
+}
+.vocab-words {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  align-items: flex-start;
+}
+.vocab-word {
+  font-family: var(--body);
+  font-size: 13.5px;
+  color: var(--chalk);
+  transform: rotate(-0.4deg);
+  line-height: 1.2;
+}
+.vocab-word:nth-child(even) {
+  transform: rotate(0.4deg);
+}
+.vocab-word.fresh {
+  animation: vocab-write-in 1s ease-out forwards;
+}
+@keyframes vocab-write-in {
+  0% {
+    clip-path: inset(0 100% 0 0);
+    color: var(--amber);
+  }
+  50% {
+    clip-path: inset(0 0 0 0);
+    color: var(--amber);
+  }
+  100% {
+    clip-path: inset(0 0 0 0);
+    color: var(--chalk);
+  }
+}
+.vocab-smear {
+  display: block;
+  height: 11px;
+  background: var(--chalk-faint);
+  opacity: 0.5;
+  filter: url(#chalk-rough) blur(1.5px);
+  transform: rotate(-1.1deg);
+}
+.vocab-smear:nth-child(odd) {
+  transform: rotate(1.2deg);
+}
+.vocab-smear:nth-child(even) {
+  transform: rotate(-0.8deg);
+}
+
+@media (max-width: 860px) {
+  .problem.has-vocab {
+    display: block;
+    max-width: 720px;
+  }
+  .problem.has-vocab > .vocab {
+    margin-top: 22px;
+  }
+}
+
 /* code editor slot */
 .workarea {
   margin-top: 30px;
@@ -1191,4 +1278,5 @@ body::before {
 @media (prefers-reduced-motion: reduce) {
   .thinking .dot { animation: none; }
   .say .caret { animation: none; }
+  .vocab-word.fresh { animation: none; }
 }
