@@ -84,7 +84,14 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
     },
   })
   if (!res.ok) {
-    throw new Error(`Request failed: ${res.status}`)
+    let message = `Request failed: ${res.status}`
+    try {
+      const body = (await res.json()) as { error?: string }
+      if (body.error) message = body.error
+    } catch {
+      // keep status message
+    }
+    throw new Error(message)
   }
   if (res.status === 204) return undefined as T
   return res.json() as Promise<T>
@@ -179,19 +186,35 @@ export async function startSession(
   )
 }
 
+// Hard client-side cap on a run: the slowest legit path (first csharp run =
+// compile + 60s case timeout, plus case re-extraction on a resumed session)
+// stays well under this. If the server never answers (hung child, wedged
+// socket), the fetch aborts so the run button can't stay stuck on "running…".
+const RUN_FETCH_TIMEOUT_MS = 120_000
+
 export async function runExamples(
   sessionId: string,
   code: string,
   language: string,
   dirty?: { code: string; lang: string },
 ): Promise<{ result: StudentRunResult; takes: PersistedTake[] }> {
-  return request<{ result: StudentRunResult; takes: PersistedTake[] }>(
-    `/api/session/${sessionId}/run`,
-    {
-      method: 'POST',
-      body: JSON.stringify({ code, language, ...(dirty ? { dirty } : {}) }),
-    },
-  )
+  try {
+    return await request<{ result: StudentRunResult; takes: PersistedTake[] }>(
+      `/api/session/${sessionId}/run`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ code, language, ...(dirty ? { dirty } : {}) }),
+        signal: AbortSignal.timeout(RUN_FETCH_TIMEOUT_MS),
+      },
+    )
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'TimeoutError') {
+      throw new Error(
+        `the run never came back after ${RUN_FETCH_TIMEOUT_MS / 1000}s — gave up waiting (is the api server stuck?)`,
+      )
+    }
+    throw err
+  }
 }
 
 export async function addTake(

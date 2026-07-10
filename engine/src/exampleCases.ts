@@ -4,6 +4,9 @@ import { killTree } from './llm.js';
 export type CaseSpec = { display: string; args: unknown[]; expected: unknown };
 
 const EXTRACT_TIMEOUT_MS = 10_000;
+// After a timeout kill, how long to keep waiting for 'close' before settling
+// anyway (a kill-race orphan can hold the stdio pipes open forever).
+const KILL_GRACE_MS = 5_000;
 
 function buildExtractScript(examples: { input: string; output: string }[]): string {
   const examplesJson = JSON.stringify(JSON.stringify(examples));
@@ -51,10 +54,26 @@ export async function extractCases(
     const stdoutChunks: Buffer[] = [];
     const stderrChunks: Buffer[] = [];
     let killed = false;
+    let settled = false;
+    const settle = (exitCode: number | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({
+        stdout: Buffer.concat(stdoutChunks).toString('utf-8'),
+        stderr: Buffer.concat(stderrChunks).toString('utf-8'),
+        code: exitCode,
+        timedOut: killed,
+      });
+    };
     const timer = setTimeout(() => {
       killed = true;
       if (child.pid != null) killTree(child.pid);
       else child.kill();
+      // 'close' waits for the stdio pipes, and a kill-race survivor (an orphaned
+      // grandchild holding the inherited handles) can keep them open forever —
+      // after the kill, stop waiting for it.
+      setTimeout(() => settle(null), KILL_GRACE_MS).unref();
     }, EXTRACT_TIMEOUT_MS);
 
     child.stdout.on('data', (chunk: Buffer) => {
@@ -64,17 +83,13 @@ export async function extractCases(
       stderrChunks.push(chunk);
     });
     child.on('error', (err) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
       reject(err);
     });
     child.on('close', (exitCode) => {
-      clearTimeout(timer);
-      resolve({
-        stdout: Buffer.concat(stdoutChunks).toString('utf-8'),
-        stderr: Buffer.concat(stderrChunks).toString('utf-8'),
-        code: exitCode,
-        timedOut: killed,
-      });
+      settle(exitCode);
     });
 
     child.stdin.on('error', () => {});

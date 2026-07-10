@@ -95,9 +95,25 @@ export async function verifyCard(card: ProblemCard): Promise<VerificationResult>
     const stdoutChunks: Buffer[] = [];
     const stderrChunks: Buffer[] = [];
     let killed = false;
+    let settled = false;
+    const settle = (exitCode: number | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({
+        stdout: Buffer.concat(stdoutChunks).toString('utf-8'),
+        stderr: Buffer.concat(stderrChunks).toString('utf-8'),
+        code: exitCode,
+        timedOut: killed,
+      });
+    };
     const timer = setTimeout(() => {
       killed = true;
       child.kill();
+      // 'close' waits for the stdio pipes, and a kill-race survivor (an orphaned
+      // grandchild holding the inherited handles) can keep them open forever —
+      // after the kill, stop waiting for it.
+      setTimeout(() => settle(null), 5_000).unref();
     }, VERIFY_TIMEOUT_MS);
 
     child.stdout.on('data', (chunk: Buffer) => {
@@ -107,17 +123,13 @@ export async function verifyCard(card: ProblemCard): Promise<VerificationResult>
       stderrChunks.push(chunk);
     });
     child.on('error', (err) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
       reject(err);
     });
     child.on('close', (exitCode) => {
-      clearTimeout(timer);
-      resolve({
-        stdout: Buffer.concat(stdoutChunks).toString('utf-8'),
-        stderr: Buffer.concat(stderrChunks).toString('utf-8'),
-        code: exitCode,
-        timedOut: killed,
-      });
+      settle(exitCode);
     });
 
     child.stdin.on('error', () => {}); // child may die before stdin flushes

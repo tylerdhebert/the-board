@@ -24,6 +24,9 @@ type HarnessPayload =
 const PYTHON_TIMEOUT_MS = 15_000;
 const TS_TIMEOUT_MS = 20_000;
 const CSHARP_TIMEOUT_MS = 60_000;
+// After a timeout kill, how long to keep waiting for 'close' before settling
+// anyway (a kill-race orphan can hold the stdio pipes open forever).
+const KILL_GRACE_MS = 5_000;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SERVER_DIR = join(__dirname, '..', '..', 'server');
@@ -118,10 +121,26 @@ async function runChild(
     const stdoutChunks: Buffer[] = [];
     const stderrChunks: Buffer[] = [];
     let killed = false;
+    let settled = false;
+    const settle = (exitCode: number | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({
+        stdout: Buffer.concat(stdoutChunks).toString('utf-8'),
+        stderr: Buffer.concat(stderrChunks).toString('utf-8'),
+        code: exitCode,
+        timedOut: killed,
+      });
+    };
     const timer = setTimeout(() => {
       killed = true;
       if (child.pid != null) killTree(child.pid);
       else child.kill();
+      // 'close' waits for the stdio pipes, and a kill-race survivor (an orphaned
+      // grandchild holding the inherited handles) can keep them open forever —
+      // after the kill, stop waiting for it.
+      setTimeout(() => settle(null), KILL_GRACE_MS).unref();
     }, opts.timeoutMs);
 
     child.stdout.on('data', (chunk: Buffer) => {
@@ -131,17 +150,13 @@ async function runChild(
       stderrChunks.push(chunk);
     });
     child.on('error', (err) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
       reject(err);
     });
     child.on('close', (exitCode) => {
-      clearTimeout(timer);
-      resolve({
-        stdout: Buffer.concat(stdoutChunks).toString('utf-8'),
-        stderr: Buffer.concat(stderrChunks).toString('utf-8'),
-        code: exitCode,
-        timedOut: killed,
-      });
+      settle(exitCode);
     });
 
     if (opts.stdin != null) {

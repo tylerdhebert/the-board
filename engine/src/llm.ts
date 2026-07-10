@@ -18,6 +18,9 @@ export interface LLMClient { complete(req: LLMRequest): Promise<string> }
 // Watchdog: if the child produces no output at all for this long, kill its
 // whole process tree and fail the call so the caller can surface an error.
 const CLI_INACTIVITY_MS = Number(process.env.TUTOR_CLI_INACTIVITY_MS ?? 120_000);
+// After a timeout kill, how long to keep waiting for 'close' before settling
+// anyway (a kill-race orphan can hold the stdio pipes open forever).
+const KILL_GRACE_MS = 5_000;
 
 export function killTree(pid: number): void {
   if (process.platform === 'win32') {
@@ -45,12 +48,26 @@ function runCli(
     const stdoutChunks: Buffer[] = [];
     const stderrChunks: Buffer[] = [];
     let timedOut = false;
+    let settled = false;
     let watchdog: NodeJS.Timeout | undefined;
+    const fail = (err: Error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(watchdog);
+      reject(err);
+    };
     const resetWatchdog = () => {
       clearTimeout(watchdog);
       watchdog = setTimeout(() => {
         timedOut = true;
         if (child.pid != null) killTree(child.pid);
+        // 'close' waits for the stdio pipes, and a kill-race survivor (an orphaned
+        // grandchild holding the inherited handles) can keep them open forever —
+        // after the kill, stop waiting for it.
+        setTimeout(() => fail(new Error(
+          `${command} produced no output for ${CLI_INACTIVITY_MS / 1000}s and was killed ` +
+          '(stalled stream?) — try again',
+        )), KILL_GRACE_MS).unref();
       }, CLI_INACTIVITY_MS);
     };
     resetWatchdog();
@@ -68,23 +85,24 @@ function runCli(
     });
 
     child.on('error', (err) => {
-      clearTimeout(watchdog);
-      reject(err);
+      fail(err instanceof Error ? err : new Error(String(err)));
     });
 
     child.on('close', (code) => {
+      if (settled) return;
       clearTimeout(watchdog);
       const stdout = Buffer.concat(stdoutChunks).toString('utf-8');
       const stderr = Buffer.concat(stderrChunks).toString('utf-8');
       if (timedOut) {
-        reject(new Error(
+        fail(new Error(
           `${command} produced no output for ${CLI_INACTIVITY_MS / 1000}s and was killed ` +
           '(stalled stream?) — try again',
         ));
       } else if (code === 0) {
+        settled = true;
         resolve({ stdout, stderr });
       } else {
-        reject(new Error(`${command} exited with code ${code}: ${stderr}`));
+        fail(new Error(`${command} exited with code ${code}: ${stderr}`));
       }
     });
 

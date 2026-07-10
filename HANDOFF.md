@@ -173,9 +173,19 @@ restart 8787 to pick it up (tsx isn't in watch mode). Web changes hot-reload.
      (auto-grow + cap + top drag handle; resizable margin), then supersede
      them. Do NOT blindly discard.
    - **Round A (first, tonight-sized):**
-     (a) BUG: run that times out (infinite loop) leaves a sticky "running…"
-     state after the error — repro live, likely error-path response-shape
-     mismatch from the takes change. Fix before anything.
+     (a) ~~BUG: sticky "running…"~~ FIXED 2026-07-10 (uncommitted? see
+     CURRENT STATE below; spec + full diagnosis in
+     `.agent-tasks/sticky-running.md`). Root cause was NOT a response-shape
+     mismatch: every child runner settled only on the child's `'close'`
+     event, which waits for stdio pipes — a kill-race survivor (orphaned
+     esbuild/codex grandchild holding inherited handles) keeps them open
+     forever, so a timed-out run could hang the endpoint and wedge the
+     button. Fix: guarded settle + 5s post-kill grace in runStudentCode /
+     llm runCli / extractCases / verifyCard, plus a client-side 120s
+     AbortSignal cap on the run fetch and real error messages surfaced
+     from `{error}` bodies. Verified live on an isolated server (python
+     15s + ts 20s timeouts, happy path 3/3). Implemented by grok-4.5-xhigh
+     via cursor-subagent, diff sign-off + verification by Claude.
      (b) review-my-work + commentary: composer text rides along as
      "my notes:" on the review turn (user already does this manually).
      (c) chat ergonomics: resizable margin (drag divider, width in
@@ -232,6 +242,37 @@ restart 8787 to pick it up (tsx isn't in watch mode). Web changes hot-reload.
      models-suggestion list was CUT by the user: no LLM-known slug lists).
    - **Backlog:** API-client backends (waiting on keys), mutation-problem
      run support (infer check mode at ingest), README refresh (very stale).
+
+## CURRENT STATE (2026-07-10, Round A session — read this first)
+
+Concise pickup list for the next agent (codex):
+
+1. **Round A(a) sticky-running fix: DONE + verified**, committed as the
+   commit touching `engine/src/{runStudentCode,llm,exampleCases,ingest}.ts`
+   + `web/src/api.ts`. **The live stack has NOT picked it up** — tsx isn't
+   in watch mode, so restart the api (or the whole `npm run desktop`) when
+   convenient. Web half hot-reloads by itself.
+2. **Round A(b) NEXT — small:** composer text rides along on review-my-work
+   as "my notes:" (see THE PLAN item (b) above). All in `web/src/App.tsx`
+   (`review()` + `reviewPrompt`).
+3. **Round A(c) NEXT — the ergonomics pass:** THE PLAN item (c). The
+   working tree still holds the user's UNCOMMITTED prototypes in
+   `web/src/App.tsx` + `web/src/index.css` (textarea rows=6, full-width
+   Send row, margin 400px → 25vw). They are design intent: implement
+   properly (auto-grow capped ~5-6 rows + top-edge drag handle; resizable
+   margin with width in localStorage; styling pass per plan), then
+   supersede them. Do NOT plain-revert.
+4. **Then:** python LSP spec (`.agent-tasks/python-lsp.md`), Round B,
+   Round C minimal, Round D (discuss first). All detailed in THE PLAN.
+5. **Conventions:** implementation goes to CLI subagents (implementer =
+   grok-4.5-xhigh via the cli-subagents skill's cursor-subagent.ps1; spec
+   in `.agent-tasks/*.md`, short flag-free prompt "read X and implement it
+   exactly"); orchestrator writes the spec, reviews the diff, verifies
+   live. Verification pattern that works: isolated server on :8790 with
+   `TUTOR_DB_PATH` pointing at a scratch db — never test against the real
+   tutor.db (three test sessions leaked into it this session and were
+   deleted; the running 8787 may still list them in the ledger until
+   restarted).
 
 ## Recently shipped
 - **2026-07-09 (streaming session):** SSE stage streaming + typewriter reveal
