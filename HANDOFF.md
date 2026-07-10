@@ -252,19 +252,78 @@ Concise pickup list for the next agent (codex):
    + `web/src/api.ts`. **The live stack has NOT picked it up** — tsx isn't
    in watch mode, so restart the api (or the whole `npm run desktop`) when
    convenient. Web half hot-reloads by itself.
-2. **Round A(b) NEXT — small:** composer text rides along on review-my-work
-   as "my notes:" (see THE PLAN item (b) above). All in `web/src/App.tsx`
-   (`review()` + `reviewPrompt`).
-3. **Round A(c) NEXT — the ergonomics pass:** THE PLAN item (c). The
-   working tree still holds the user's UNCOMMITTED prototypes in
-   `web/src/App.tsx` + `web/src/index.css` (textarea rows=6, full-width
-   Send row, margin 400px → 25vw). They are design intent: implement
-   properly (auto-grow capped ~5-6 rows + top-edge drag handle; resizable
-   margin with width in localStorage; styling pass per plan), then
-   supersede them. Do NOT plain-revert.
-4. **Then:** python LSP spec (`.agent-tasks/python-lsp.md`), Round B,
-   Round C minimal, Round D (discuss first). All detailed in THE PLAN.
-5. **Conventions:** implementation goes to CLI subagents (implementer =
+2. **Round A(b/c): DONE + build-verified, currently uncommitted.** Implemented
+   by `grok-4.5-xhigh` through Cursor from
+   `.agent-tasks/round-a-ergonomics.md`. Review-my-work now includes non-empty
+   composer text under `My notes:` and clears the composer after submission.
+   The tutor margin has a persisted pointer/keyboard resize divider; the
+   composer auto-grows to six lines, supports manual top-edge resizing, and
+   keeps Send on its own full-width row. Student/tutor notes and the composer
+   received the planned restrained shadow/glow/chalk styling. Tyler's
+   prototypes in `web/src/App.tsx` + `web/src/index.css` were preserved as
+   design intent and superseded by the complete behavior. `bun run build` in
+   `web/` passes on 2026-07-10.
+3. **Python LSP: DONE + verified, currently uncommitted.** Implemented by
+   `grok-4.5-xhigh` through Cursor from `.agent-tasks/python-lsp.md`. Pyright
+   now runs over the generalized per-language websocket bridge; Monaco keeps
+   one lazy LSP handle per language and deactivates the other on language
+   switches. The orchestrator added a per-language startup guard after review
+   so overlapping React effects cannot create duplicate sessions. Grok's
+   isolated bridge checks returned 163 Python completions (including `path`)
+   and 50 C# completions (including `WriteLine`); its scratch server exited by
+   PID. Independent engine/server TypeScript checks and the web production
+   build all pass on 2026-07-10.
+4. **Round B: DONE + verified, currently uncommitted.** Implemented by
+   `grok-4.5-xhigh` through Cursor from
+   `.agent-tasks/round-b-board-access.md`. Before each turn the web client
+   serializes and flushes editor saves, then the server materializes the
+   current buffer as `server/.teacher-scratch/<session>/editor.<ext>` (or the
+   isolated `TUTOR_TEACHER_SCRATCH_DIR`). The teacher alone receives that
+   directory as its CLI cwd plus a compact `BOARD:` status line and relative
+   editor path; gate/unlock remain unchanged. Review-my-work no longer embeds
+   source or verbose run output in the transcript. The teacher template keeps
+   pseudocode/scaffolds in the selected language. A fake-client redraft check
+   proved exact source on disk, source absent from prompts, teacher cwd on both
+   drafts, and no cwd on gate/unlock. Independent engine/server TypeScript
+   checks and the web production build pass on 2026-07-10.
+5. **Round C minimal: DONE + verified, currently uncommitted.** Implemented by
+   `grok-4.5-xhigh` through Cursor from `.agent-tasks/round-c-stress.md`. The
+   configured ingest model proposes call inputs only; a short-timeout Python
+   oracle executes the verified reference independently for each accepted
+   literal call and caches valid `{input, output}` rows on the card. Runs carry
+   official and tougher rows together with explicit stress markers. Official
+   examples alone determine solved; tougher rows are grouped, styled, and
+   scored separately. The client sees only `stressCount`, never cached rows or
+   answer-key fields. An isolated fake-LLM check covered invalid/duplicate/
+   throwing proposals, oracle-derived output, stress marker propagation, both
+   solved-gating directions, and safe payload keys. Independent engine/server
+   TypeScript checks and the web production build pass on 2026-07-10. Live
+   generation with the configured ingest CLI remains to be manually exercised
+   after the API restart.
+6. **Student-safe ingest contract: DONE + verified, currently uncommitted.**
+   `prompts/ingest_prompt.md` and `schema.json` now identify `statement` and
+   `constraints` as student-visible verbatim fields and reserve inferred
+   strategies, algorithm steps, data structures, complexity guidance, and
+   solution hints for private card fields. All seven tracked built-in cards
+   had derived guidance removed from `constraints`; explicit input/domain
+   limits and problem requirements remain. Every card and the schema parse as
+   JSON, and `git diff --check` passes on 2026-07-10.
+7. **Claude review of the batch (2026-07-10 afternoon): PASSED + polish
+   applied, uncommitted.** Full diff review + independent verification
+   (3× tsc, web build, live isolated server on :8791: payload leak check,
+   solved gating official-only, per-lang /api/lsp/info, pyright ws
+   handshake). Three review findings fixed from
+   `.agent-tasks/review-polish.md` (grok-4.5-xhigh via cursor): review
+   notes now visible in the transcript as a 2-line-clamped `.say-sub`
+   under "↳ review my work" (display-text encoding, no persistence
+   change); stress rows propagate to sibling in-memory sessions on the
+   same card + disk-reload guard on the stress endpoint; unrun attempt
+   chips show `–/N` again. Known-minor leftovers: concurrent stress
+   clicks from two sessions of the same card can double-generate
+   (per-session inflight keys); teacher-scratch dirs accumulate per
+   session (needs a userData/cleanup story if the app is ever packaged).
+8. **Next:** Round D, which must be discussed with the user before building.
+9. **Conventions:** implementation goes to CLI subagents (implementer =
    grok-4.5-xhigh via the cli-subagents skill's cursor-subagent.ps1; spec
    in `.agent-tasks/*.md`, short flag-free prompt "read X and implement it
    exactly"); orchestrator writes the spec, reviews the diff, verifies

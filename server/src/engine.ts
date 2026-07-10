@@ -16,8 +16,9 @@ import {
 import { ingest } from '../../engine/src/ingest.js';
 import { extractCases, type CaseSpec } from '../../engine/src/exampleCases.js';
 import { runStudentCode, type StudentRunResult } from '../../engine/src/runStudentCode.js';
+import { generateStressCases } from '../../engine/src/stressCases.js';
 
-export { TutorSession, extractCases, runStudentCode, JsonlTracer, createClient };
+export { TutorSession, extractCases, runStudentCode, JsonlTracer, createClient, generateStressCases };
 export type { CodeSnippet, Message, ProblemCard, SessionModels, CaseSpec, StudentRunResult };
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -35,12 +36,14 @@ export function studentSafeProblem(card: ProblemCard): {
   statement: string;
   constraints: string;
   difficulty?: string;
+  stressCount: number;
 } {
   return {
     title: card.title,
     statement: card.statement,
     constraints: card.constraints,
     ...(card.difficulty ? { difficulty: card.difficulty } : {}),
+    stressCount: card.stress?.length ?? 0,
   };
 }
 
@@ -131,6 +134,12 @@ export async function loadCard(name: string): Promise<ProblemCard> {
     }
     throw err;
   }
+}
+
+export async function saveCard(name: string, card: ProblemCard): Promise<void> {
+  assertSafeCardName(name);
+  const filePath = path.join(cardsDir, `${name}.card.json`);
+  await writeFile(filePath, JSON.stringify(card, null, 2) + '\n', 'utf8');
 }
 
 export async function listCards(): Promise<{ name: string; title: string; difficulty?: string }[]> {

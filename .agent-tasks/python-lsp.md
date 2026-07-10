@@ -4,6 +4,7 @@ The language picker already offers python; give it real IntelliSense like
 csharp has. Same slim-client architecture — no monaco-languageclient, ever.
 
 ## SUBAGENT GROUND RULES (non-negotiable)
+- Do not run the `tyler-review` skill or launch any auxiliary reviewer.
 - Test fixtures use ISOLATED paths (`TUTOR_DB_PATH`, scratch dirs) — never
   the real `tutor.db` / `logs/` / `cards/` / the real LSP scratch dirs.
 - Never kill processes by name — only PIDs you started.

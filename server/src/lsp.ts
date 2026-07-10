@@ -16,36 +16,93 @@ const CSPROJ = `<Project Sdk="Microsoft.NET.Sdk">
 `;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, '..', '.lsp-scratch');
-const CS_FILE = path.join(ROOT, 'Solution.cs');
-const CSPROJ_FILE = path.join(ROOT, 'scratch.csproj');
+const SERVER_ROOT = path.resolve(__dirname, '..');
+const PYRIGHT_LANGSERVER = path.join(
+  SERVER_ROOT,
+  'node_modules',
+  'pyright',
+  'langserver.index.js',
+);
 
-let workspaceReady = false;
+type LangId = 'csharp' | 'python';
 
-export function ensureLspWorkspace(): {
+type LangConfig = {
+  scratch: string;
+  file: string;
+  setup: (root: string, filePath: string) => void;
+  spawn: (cwd: string) => ChildProcessWithoutNullStreams;
+};
+
+const LSP_LANGS: Record<LangId, LangConfig> = {
+  csharp: {
+    scratch: '.lsp-scratch',
+    file: 'Solution.cs',
+    setup: (root, filePath) => {
+      fs.writeFileSync(path.join(root, 'scratch.csproj'), CSPROJ, 'utf8');
+      if (!fs.existsSync(filePath)) {
+        fs.writeFileSync(filePath, '', 'utf8');
+      }
+    },
+    spawn: (cwd) =>
+      spawn('csharp-ls', [], {
+        cwd,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        windowsHide: true,
+      }),
+  },
+  python: {
+    scratch: '.lsp-scratch-py',
+    file: 'solution.py',
+    setup: (root, filePath) => {
+      if (!fs.existsSync(filePath)) {
+        fs.writeFileSync(filePath, '', 'utf8');
+      }
+      fs.writeFileSync(
+        path.join(root, 'pyrightconfig.json'),
+        JSON.stringify({ typeCheckingMode: 'basic' }),
+        'utf8',
+      );
+    },
+    spawn: (cwd) =>
+      spawn(process.execPath, [PYRIGHT_LANGSERVER, '--stdio'], {
+        cwd,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        windowsHide: true,
+      }),
+  },
+};
+
+const ready = new Set<LangId>();
+
+function isLangId(v: string): v is LangId {
+  return v === 'csharp' || v === 'python';
+}
+
+export function ensureLspWorkspace(lang: LangId): {
   root: string;
-  csFile: string;
+  filePath: string;
   rootUri: string;
   fileUri: string;
 } {
-  if (!workspaceReady) {
-    fs.mkdirSync(ROOT, { recursive: true });
-    fs.writeFileSync(CSPROJ_FILE, CSPROJ, 'utf8');
-    if (!fs.existsSync(CS_FILE)) {
-      fs.writeFileSync(CS_FILE, '', 'utf8');
-    }
-    workspaceReady = true;
+  const cfg = LSP_LANGS[lang];
+  const root = path.resolve(SERVER_ROOT, cfg.scratch);
+  const filePath = path.join(root, cfg.file);
+  if (!ready.has(lang)) {
+    fs.mkdirSync(root, { recursive: true });
+    cfg.setup(root, filePath);
+    ready.add(lang);
   }
   return {
-    root: ROOT,
-    csFile: CS_FILE,
-    rootUri: pathToFileURL(ROOT + path.sep).href,
-    fileUri: pathToFileURL(CS_FILE).href,
+    root,
+    filePath,
+    rootUri: pathToFileURL(root + path.sep).href,
+    fileUri: pathToFileURL(filePath).href,
   };
 }
 
-export function lspInfo(): { rootUri: string; fileUri: string } {
-  const { rootUri, fileUri } = ensureLspWorkspace();
+export function lspInfo(lang: string = 'csharp'): { rootUri: string; fileUri: string } {
+  const id: LangId = isLangId(lang) ? lang : 'csharp';
+  const { rootUri, fileUri } = ensureLspWorkspace(id);
   return { rootUri, fileUri };
 }
 
@@ -86,12 +143,12 @@ type LiveBridge = {
   child: ChildProcessWithoutNullStreams;
 };
 
-let live: LiveBridge | null = null;
+const liveByLang = new Map<LangId, LiveBridge>();
 
-function killLive(): void {
-  if (!live) return;
-  const prev = live;
-  live = null;
+function killLive(lang: LangId): void {
+  const prev = liveByLang.get(lang);
+  if (!prev) return;
+  liveByLang.delete(lang);
   try {
     prev.child.kill();
   } catch {
@@ -104,24 +161,21 @@ function killLive(): void {
   }
 }
 
-function attachConnection(ws: WebSocket): void {
-  killLive();
+function attachConnection(ws: WebSocket, lang: LangId): void {
+  killLive(lang);
 
-  const { root } = ensureLspWorkspace();
+  const cfg = LSP_LANGS[lang];
+  const { root } = ensureLspWorkspace(lang);
   let child: ChildProcessWithoutNullStreams;
   try {
-    child = spawn('csharp-ls', [], {
-      cwd: root,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      windowsHide: true,
-    });
+    child = cfg.spawn(root);
   } catch (err) {
-    console.warn('csharp-ls spawn failed', err);
-    ws.close(1011, 'csharp-ls unavailable');
+    console.warn(`${lang} lsp spawn failed`, err);
+    ws.close(1011, `${lang} lsp unavailable`);
     return;
   }
 
-  live = { ws, child };
+  liveByLang.set(lang, { ws, child });
   const framer = new StdioFramer();
 
   child.stderr.on('data', () => {
@@ -137,10 +191,10 @@ function attachConnection(ws: WebSocket): void {
   });
 
   const onChildGone = () => {
-    if (live?.child === child) {
-      live = null;
+    if (liveByLang.get(lang)?.child === child) {
+      liveByLang.delete(lang);
       if (ws.readyState === ws.OPEN || ws.readyState === ws.CONNECTING) {
-        ws.close(1011, 'csharp-ls unavailable');
+        ws.close(1011, `${lang} lsp unavailable`);
       }
     }
   };
@@ -157,8 +211,8 @@ function attachConnection(ws: WebSocket): void {
   });
 
   ws.on('close', () => {
-    if (live?.ws === ws) {
-      live = null;
+    if (liveByLang.get(lang)?.ws === ws) {
+      liveByLang.delete(lang);
       try {
         child.kill();
       } catch {
@@ -169,18 +223,21 @@ function attachConnection(ws: WebSocket): void {
 }
 
 export function attachLspBridge(server: http.Server): void {
-  ensureLspWorkspace();
+  ensureLspWorkspace('csharp');
+  ensureLspWorkspace('python');
   const wss = new WebSocketServer({ noServer: true });
 
   server.on('upgrade', (req, socket, head) => {
     const host = req.headers.host ?? 'localhost';
     const { pathname } = new URL(req.url ?? '/', `http://${host}`);
-    if (pathname !== '/lsp/csharp') {
+    const match = /^\/lsp\/(csharp|python)$/.exec(pathname);
+    if (!match) {
       socket.destroy();
       return;
     }
+    const lang = match[1] as LangId;
     wss.handleUpgrade(req, socket, head, (ws) => {
-      attachConnection(ws);
+      attachConnection(ws, lang);
     });
   });
 }

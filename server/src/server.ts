@@ -9,11 +9,13 @@ import {
   TutorSession,
   createClient,
   extractCases,
+  generateStressCases,
   getOrIngestCard,
   listCards,
   loadCard,
   loadSnippets,
   runStudentCode,
+  saveCard,
   studentSafeProblem,
   toSlug,
   type CaseSpec,
@@ -31,6 +33,10 @@ import {
   type PersistedTake,
 } from './sessionStore.js';
 import { loadSettings, saveSettings, type AppSettings } from './settings.js';
+import {
+  materializeTeacherEditor,
+  renderBoardContext,
+} from './teacherScratch.js';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -92,6 +98,9 @@ type SessionEntry = {
 };
 
 const sessions = new Map<string, SessionEntry>();
+
+/** Per-session in-flight stress generation — concurrent clicks share one promise. */
+const stressInflight = new Map<string, Promise<{ count: number }>>();
 
 const RUNNABLE = new Set(['python', 'typescript', 'javascript', 'csharp']);
 
@@ -196,6 +205,24 @@ async function getOrRestore(id: string): Promise<SessionEntry | null> {
   }
 }
 
+async function ensureCases(entry: SessionEntry): Promise<CaseSpec[]> {
+  if (entry.cases) return entry.cases;
+  const official = await extractCases(entry.card.examples, { stress: false });
+  const stressRows = entry.card.stress ?? [];
+  const stress =
+    stressRows.length > 0
+      ? await extractCases(stressRows, { stress: true })
+      : [];
+  entry.cases = [...official, ...stress];
+  return entry.cases;
+}
+
+function officialAllPass(result: StudentRunResult): boolean {
+  if (result.error) return false;
+  const official = result.cases.filter((c) => !c.stress);
+  return official.length > 0 && official.every((c) => c.pass);
+}
+
 async function persistEntry(entry: SessionEntry): Promise<void> {
   entry.persisted.engine = {
     transcript: [...entry.session.transcript],
@@ -294,7 +321,8 @@ async function handle(
   }
 
   if (method === 'GET' && pathname === '/api/lsp/info') {
-    sendJson(res, 200, lspInfo());
+    const lang = url.searchParams.get('lang') ?? 'csharp';
+    sendJson(res, 200, lspInfo(lang));
     return;
   }
 
@@ -446,6 +474,65 @@ async function handle(
     return;
   }
 
+  const stressMatch = pathname.match(/^\/api\/session\/([^/]+)\/stress$/);
+  if (method === 'POST' && stressMatch) {
+    const sessionId = stressMatch[1]!;
+    const entry = await getOrRestore(sessionId);
+    if (!entry) {
+      sendJson(res, 404, { error: 'session not found' });
+      return;
+    }
+    if (!entry.card.stress || entry.card.stress.length === 0) {
+      const loaded = await loadCard(entry.cardName);
+      if (loaded.stress && loaded.stress.length > 0) {
+        entry.card.stress = loaded.stress;
+        delete entry.cases;
+      }
+    }
+    const cached = entry.card.stress;
+    if (cached && cached.length > 0) {
+      sendJson(res, 200, { count: cached.length });
+      return;
+    }
+
+    let pending = stressInflight.get(sessionId);
+    if (!pending) {
+      pending = (async () => {
+        try {
+          const settings = await loadSettings();
+          const ingest = settings.models.ingest;
+          const rows = await generateStressCases(
+            createClient(ingest.backend),
+            entry.card,
+            ingest.model,
+          );
+          entry.card.stress = rows;
+          await saveCard(entry.cardName, entry.card);
+          delete entry.cases;
+          for (const [id, sibling] of sessions) {
+            if (id === sessionId) continue;
+            if (sibling.cardName !== entry.cardName) continue;
+            sibling.card.stress = rows;
+            delete sibling.cases;
+          }
+          return { count: rows.length };
+        } finally {
+          stressInflight.delete(sessionId);
+        }
+      })();
+      stressInflight.set(sessionId, pending);
+    }
+
+    try {
+      const result = await pending;
+      sendJson(res, 200, result);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      sendJson(res, 500, { error: message });
+    }
+    return;
+  }
+
   const runMatch = pathname.match(/^\/api\/session\/([^/]+)\/run$/);
   if (method === 'POST' && runMatch) {
     const sessionId = runMatch[1]!;
@@ -484,16 +571,14 @@ async function handle(
           });
         }
       }
-      if (!entry.cases) {
-        entry.cases = await extractCases(entry.card.examples);
-      }
+      const cases = await ensureCases(entry);
       const snippets = await loadSnippets(entry.cardName);
       const slug = LANG_SLUG[language] ?? language;
       const scaffold = snippets.find((s) => s.langSlug === slug)?.code;
       const result = await runStudentCode(
         code,
         language as 'python' | 'typescript' | 'javascript' | 'csharp',
-        entry.cases,
+        cases,
         scaffold,
       );
       const newest = entry.persisted.takes[entry.persisted.takes.length - 1];
@@ -516,7 +601,7 @@ async function handle(
       entry.persisted.lastRun = result;
       entry.persisted.code = code;
       entry.persisted.lang = language;
-      if (result.cases.length > 0 && result.cases.every((c) => c.pass)) {
+      if (officialAllPass(result)) {
         entry.persisted.solved = true;
       }
       await persistEntry(entry);
@@ -550,7 +635,17 @@ async function handle(
       Connection: 'keep-alive',
     });
     try {
-      const result = await entry.session.submit(message, (stage) => sendEvent(res, 'stage', { stage }));
+      const { cwd: teacherCwd, ext } = await materializeTeacherEditor(
+        sessionId,
+        entry.persisted.code,
+        entry.persisted.lang,
+      );
+      const boardContext = renderBoardContext(entry.persisted, ext);
+      const result = await entry.session.submit(
+        message,
+        (stage) => sendEvent(res, 'stage', { stage }),
+        { cwd: teacherCwd, boardContext },
+      );
       entry.persisted.notes.push({
         role: 'student',
         text: display ?? message,

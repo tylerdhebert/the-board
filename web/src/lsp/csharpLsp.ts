@@ -37,6 +37,17 @@ type SignatureHelp = {
   activeParameter?: number
 }
 
+type LspCfg = {
+  lang: string
+  languageId: string
+  wsPath: string
+  monacoLanguage: string
+  /** Fallback ms after didOpen-empty before pushing buffer if $/progress never ends. */
+  loadFallbackMs: number
+  markerOwner: string
+  unavailableLabel: string
+}
+
 const COMPLETION_KIND_MAP: Record<number, number> = {}
 
 function ensureKindMap(monaco: Monaco): void {
@@ -113,41 +124,44 @@ function hoverContentsToMarkdown(
   return [{ value: contents.value }]
 }
 
-export type CsharpLspHandle = {
+export type LspHandle = {
   setActive(active: boolean): void
   dispose(): void
 }
 
-export async function startCsharpLsp(
+export type CsharpLspHandle = LspHandle
+
+async function startLsp(
   monaco: Monaco,
   editor: Editor,
-): Promise<CsharpLspHandle> {
-  const noop: CsharpLspHandle = { setActive() {}, dispose() {} }
+  cfg: LspCfg,
+): Promise<LspHandle> {
+  const noop: LspHandle = { setActive() {}, dispose() {} }
 
   let info: { rootUri: string; fileUri: string }
   try {
-    const res = await fetch('/api/lsp/info')
+    const res = await fetch(`/api/lsp/info?lang=${encodeURIComponent(cfg.lang)}`)
     if (!res.ok) throw new Error(`lsp/info ${res.status}`)
     info = (await res.json()) as { rootUri: string; fileUri: string }
   } catch (err) {
-    console.warn('csharp-ls unavailable', err)
+    console.warn(`${cfg.unavailableLabel} unavailable`, err)
     return noop
   }
 
-  const wsUrl = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/lsp/csharp`
+  const wsUrl = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}${cfg.wsPath}`
 
   let rpc: JsonRpcWs
   try {
     rpc = await JsonRpcWs.connect(wsUrl)
   } catch (err) {
-    console.warn('csharp-ls unavailable', err)
+    console.warn(`${cfg.unavailableLabel} unavailable`, err)
     return noop
   }
 
   const model = editor.getModel()
   if (!model) {
     rpc.dispose()
-    console.warn('csharp-ls unavailable', new Error('no model'))
+    console.warn(`${cfg.unavailableLabel} unavailable`, new Error('no model'))
     return noop
   }
 
@@ -177,11 +191,14 @@ export async function startCsharpLsp(
           workspaceFolders: true,
           configuration: true,
         },
+        window: {
+          workDoneProgress: true,
+        },
       },
     })
     rpc.notify('initialized', {})
   } catch (err) {
-    console.warn('csharp-ls unavailable', err)
+    console.warn(`${cfg.unavailableLabel} unavailable`, err)
     rpc.dispose()
     return noop
   }
@@ -207,6 +224,7 @@ export async function startCsharpLsp(
 
   // Open empty first — csharp-ls binds the overlay reliably only after the
   // project finishes loading; we push the real buffer via didChange then.
+  // Python uses the same flow with a shorter fallback (no project load).
   let projectReady = false
   let loadFallbackTimer: ReturnType<typeof setTimeout> | null = null
   let unsubProgress: () => void = () => {}
@@ -224,12 +242,12 @@ export async function startCsharpLsp(
     const kind = (params as { value?: { kind?: string } } | undefined)?.value?.kind
     if (kind === 'end') pushBufferAfterLoad()
   })
-  loadFallbackTimer = setTimeout(pushBufferAfterLoad, 8000)
+  loadFallbackTimer = setTimeout(pushBufferAfterLoad, cfg.loadFallbackMs)
 
   rpc.notify('textDocument/didOpen', {
     textDocument: {
       uri: fileUri,
-      languageId: 'csharp',
+      languageId: cfg.languageId,
       version,
       text: '',
     },
@@ -246,7 +264,7 @@ export async function startCsharpLsp(
   ensureKindMap(monaco)
 
   disposables.push(
-    monaco.languages.registerCompletionItemProvider('csharp', {
+    monaco.languages.registerCompletionItemProvider(cfg.monacoLanguage, {
       triggerCharacters: ['.'],
       provideCompletionItems: async (m: ITextModel, position: IPosition) => {
         const word = m.getWordUntilPosition(position)
@@ -298,7 +316,7 @@ export async function startCsharpLsp(
   )
 
   disposables.push(
-    monaco.languages.registerHoverProvider('csharp', {
+    monaco.languages.registerHoverProvider(cfg.monacoLanguage, {
       provideHover: async (_m: ITextModel, position: IPosition) => {
         try {
           syncBeforeRequest()
@@ -319,7 +337,7 @@ export async function startCsharpLsp(
   )
 
   disposables.push(
-    monaco.languages.registerSignatureHelpProvider('csharp', {
+    monaco.languages.registerSignatureHelpProvider(cfg.monacoLanguage, {
       signatureHelpTriggerCharacters: ['(', ','],
       provideSignatureHelp: async (_m: ITextModel, position: IPosition) => {
         try {
@@ -375,10 +393,10 @@ export async function startCsharpLsp(
       ...toMonacoRange(d.range),
       message: d.message,
       severity: severityMap[d.severity ?? 1] ?? Sev.Error,
-      source: d.source ?? 'csharp-ls',
+      source: d.source ?? cfg.markerOwner,
       code: d.code != null ? String(d.code) : undefined,
     }))
-    monaco.editor.setModelMarkers(model, 'csharp-ls', markers)
+    monaco.editor.setModelMarkers(model, cfg.markerOwner, markers)
   })
 
   return {
@@ -390,11 +408,11 @@ export async function startCsharpLsp(
           clearTimeout(debounceTimer)
           debounceTimer = null
         }
-        monaco.editor.setModelMarkers(model, 'csharp-ls', [])
+        monaco.editor.setModelMarkers(model, cfg.markerOwner, [])
         return
       }
-      // Re-entering csharp: push one full didChange immediately, then resume
-      // normal debounced sync via onDidChangeContent.
+      // Re-entering this language: push one full didChange immediately, then
+      // resume normal debounced sync via onDidChangeContent.
       flushChange()
     },
     dispose() {
@@ -403,7 +421,7 @@ export async function startCsharpLsp(
       unsubProgress()
       unsubDiag()
       for (const d of disposables) d.dispose()
-      monaco.editor.setModelMarkers(model, 'csharp-ls', [])
+      monaco.editor.setModelMarkers(model, cfg.markerOwner, [])
       try {
         rpc.notify('textDocument/didClose', { textDocument: { uri: fileUri } })
       } catch {
@@ -412,4 +430,34 @@ export async function startCsharpLsp(
       rpc.dispose()
     },
   }
+}
+
+export async function startCsharpLsp(
+  monaco: Monaco,
+  editor: Editor,
+): Promise<LspHandle> {
+  return startLsp(monaco, editor, {
+    lang: 'csharp',
+    languageId: 'csharp',
+    wsPath: '/lsp/csharp',
+    monacoLanguage: 'csharp',
+    loadFallbackMs: 8000,
+    markerOwner: 'csharp-ls',
+    unavailableLabel: 'csharp-ls',
+  })
+}
+
+export async function startPythonLsp(
+  monaco: Monaco,
+  editor: Editor,
+): Promise<LspHandle> {
+  return startLsp(monaco, editor, {
+    lang: 'python',
+    languageId: 'python',
+    wsPath: '/lsp/python',
+    monacoLanguage: 'python',
+    loadFallbackMs: 1500,
+    markerOwner: 'pyright',
+    unavailableLabel: 'pyright',
+  })
 }

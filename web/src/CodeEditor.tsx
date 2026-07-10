@@ -1,11 +1,21 @@
 import { useEffect, useRef } from 'react'
 import Editor, { type OnMount } from '@monaco-editor/react'
-import { startCsharpLsp, type CsharpLspHandle } from './lsp/csharpLsp'
+import {
+  startCsharpLsp,
+  startPythonLsp,
+  type LspHandle,
+} from './lsp/csharpLsp'
 
 type Props = {
   value: string
   onChange: (v: string) => void
   language: string
+}
+
+type LspLang = 'csharp' | 'python'
+
+function isLspLang(lang: string): lang is LspLang {
+  return lang === 'csharp' || lang === 'python'
 }
 
 // Monaco themed to the chalkboard: slate background, chalk text, colored-chalk tokens.
@@ -15,30 +25,51 @@ const GHOST_COLOR = 'rgba(58, 74, 65, 0.6)' // #3a4a41 at ~60%
 export default function CodeEditor({ value, onChange, language }: Props) {
   const monacoRef = useRef<Parameters<OnMount>[1] | null>(null)
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null)
-  const lspRef = useRef<CsharpLspHandle | null>(null)
+  const lspMapRef = useRef<Map<LspLang, LspHandle>>(new Map())
+  const lspStartingRef = useRef<Set<LspLang>>(new Set())
   const languageRef = useRef(language)
   languageRef.current = language
   const genRef = useRef(0)
   const ghostRef = useRef<HTMLDivElement | null>(null)
   const disposablesRef = useRef<{ dispose: () => void }[]>([])
 
+  const syncActive = (current: string) => {
+    for (const [lang, handle] of lspMapRef.current) {
+      handle.setActive(lang === current)
+    }
+  }
+
   const ensureLsp = () => {
     const monaco = monacoRef.current
     const editor = editorRef.current
     if (!monaco || !editor) return
-    if (lspRef.current) {
-      lspRef.current.setActive(languageRef.current === 'csharp')
+    const lang = languageRef.current
+    if (!isLspLang(lang)) {
+      syncActive('')
       return
     }
-    if (languageRef.current !== 'csharp') return
-    const gen = ++genRef.current
-    void startCsharpLsp(monaco, editor).then((session) => {
+    const existing = lspMapRef.current.get(lang)
+    if (existing) {
+      syncActive(lang)
+      return
+    }
+    if (lspStartingRef.current.has(lang)) {
+      syncActive(lang)
+      return
+    }
+    // Deactivate the other language while this one starts (shared model).
+    syncActive(lang)
+    const gen = genRef.current
+    const starter = lang === 'csharp' ? startCsharpLsp : startPythonLsp
+    lspStartingRef.current.add(lang)
+    void starter(monaco, editor).then((session) => {
+      lspStartingRef.current.delete(lang)
       if (gen !== genRef.current) {
         session.dispose()
         return
       }
-      lspRef.current = session
-      session.setActive(languageRef.current === 'csharp')
+      lspMapRef.current.set(lang, session)
+      syncActive(languageRef.current)
     })
   }
 
@@ -170,8 +201,9 @@ export default function CodeEditor({ value, onChange, language }: Props) {
   useEffect(() => {
     return () => {
       genRef.current += 1
-      lspRef.current?.dispose()
-      lspRef.current = null
+      lspStartingRef.current.clear()
+      for (const handle of lspMapRef.current.values()) handle.dispose()
+      lspMapRef.current.clear()
       for (const d of disposablesRef.current) d.dispose()
       disposablesRef.current = []
       ghostRef.current?.remove()

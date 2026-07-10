@@ -7,10 +7,17 @@ import type { Message, ProblemCard, TutorMode } from './types.js';
 
 export interface TeacherReply { mode: TutorMode; reply: string; raw: string }
 
+/** Optional per-turn board context for the teacher (cwd + already-rendered lines). */
+export interface TeacherTurnContext {
+  cwd?: string;
+  boardContext?: string;
+}
+
 export async function teacherTurn(
   client: LLMClient, card: ProblemCard, transcript: Message[],
   lockedTerms: string[], model: string,
   gateFeedback?: { rejectedDraft: string; note: string },
+  turnContext?: TeacherTurnContext,
 ): Promise<TeacherReply> {
   const tpl = await readFile(join(PROMPTS_DIR, 'teacher_tmpl.md'), 'utf-8');
   const traps = bullets(
@@ -25,6 +32,9 @@ export async function teacherTurn(
   const gate_feedback = gateFeedback === undefined
     ? ''
     : `Your previous draft was REJECTED by the safety gate for: ${gateFeedback.note}\nRejected draft:\n${gateFeedback.rejectedDraft}\nRewrite it to satisfy the gate (reveal LESS, or switch mode if that is the right move).`;
+  const board_context = turnContext?.boardContext?.trim()
+    ? `${turnContext.boardContext.trim()}\n`
+    : '';
   const prompt = fillTemplate(tpl, {
     title: card.title,
     statement: card.statement,
@@ -36,11 +46,17 @@ export async function teacherTurn(
     ladder: card.ladder.join(' -> '),
     traps,
     leak_terms: bullets(lockedTerms),
+    board_context,
     transcript: renderTranscript(transcript),
     gate_feedback,
   });
 
-  const raw = await client.complete({ model, prompt, label: 'teacher' });
+  const raw = await client.complete({
+    model,
+    prompt,
+    label: 'teacher',
+    ...(turnContext?.cwd ? { cwd: turnContext.cwd } : {}),
+  });
 
   const lines = raw.split(/\r?\n/);
   let firstNonEmptyIdx = -1;

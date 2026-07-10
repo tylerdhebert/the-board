@@ -10,6 +10,8 @@ export interface LLMRequest {
   outputSchemaPath?: string;
   /** e.g. 'teacher' | 'gate' | 'unlock' — used only for tracing. */
   label?: string;
+  /** Working directory for CLI backends (teacher scratch). */
+  cwd?: string;
 }
 export interface LLMClient { complete(req: LLMRequest): Promise<string> }
 
@@ -41,9 +43,10 @@ function runCli(
   args: string[],
   stdin: string,
   env: NodeJS.ProcessEnv,
+  opts?: { cwd?: string },
 ): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { env });
+    const child = spawn(command, args, { env, cwd: opts?.cwd });
 
     const stdoutChunks: Buffer[] = [];
     const stderrChunks: Buffer[] = [];
@@ -128,7 +131,13 @@ export class CodexCliClient implements LLMClient {
     args.push('-o', tempfile, '-');
 
     try {
-      await runCli('codex', args, req.prompt, { ...process.env, PYTHONUTF8: '1' });
+      await runCli(
+        'codex',
+        args,
+        req.prompt,
+        { ...process.env, PYTHONUTF8: '1' },
+        { cwd: req.cwd },
+      );
       const output = await readFile(tempfile, 'utf-8');
       return output.trim();
     } finally {
@@ -148,7 +157,13 @@ export class ClaudeCliClient implements LLMClient {
       args.push('--model', req.model);
     }
     // req.outputSchemaPath is ignored — claude text mode has no schema.
-    const { stdout } = await runCli('claude', args, req.prompt, { ...process.env });
+    const { stdout } = await runCli(
+      'claude',
+      args,
+      req.prompt,
+      { ...process.env },
+      { cwd: req.cwd },
+    );
     return stdout.trim();
   }
 }

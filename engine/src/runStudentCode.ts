@@ -12,6 +12,8 @@ export type RunCaseResult = {
   got: string;
   pass: boolean;
   error?: string;
+  /** True for tougher cases; official examples are false/omitted. */
+  stress?: boolean;
 };
 export type StudentRunResult = { cases: RunCaseResult[]; error?: string };
 
@@ -196,6 +198,7 @@ function toRunResult(cases: CaseSpec[], payload: HarnessPayload): StudentRunResu
   const out: RunCaseResult[] = cases.map((c, i) => {
     const r = results[i];
     const expectedStr = JSON.stringify(c.expected);
+    const stressMark = c.stress ? ({ stress: true } as const) : ({ stress: false } as const);
     if (!r) {
       return {
         display: c.display,
@@ -203,6 +206,7 @@ function toRunResult(cases: CaseSpec[], payload: HarnessPayload): StudentRunResu
         got: 'null',
         pass: false,
         error: 'missing result',
+        ...stressMark,
       };
     }
     if (r.error != null) {
@@ -212,6 +216,7 @@ function toRunResult(cases: CaseSpec[], payload: HarnessPayload): StudentRunResu
         got: 'null',
         pass: false,
         error: r.error,
+        ...stressMark,
       };
     }
     if ((r.got === null || r.got === undefined) && c.expected !== null) {
@@ -222,6 +227,7 @@ function toRunResult(cases: CaseSpec[], payload: HarnessPayload): StudentRunResu
         pass: false,
         error:
           "got nothing back — did you return the result? (in-place/mutation problems aren't supported yet)",
+        ...stressMark,
       };
     }
     const pass = compareGot(r.got, c.expected);
@@ -230,6 +236,7 @@ function toRunResult(cases: CaseSpec[], payload: HarnessPayload): StudentRunResu
       expected: expectedStr,
       got: JSON.stringify(r.got),
       pass,
+      ...stressMark,
     };
   });
   return { cases: out };

@@ -1,8 +1,16 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react'
 import CodeEditor from './CodeEditor'
 import { mdLength, parseMd, renderMd } from './md'
 import {
   addTake,
+  chalkStress,
   createSession,
   getProblems,
   getSession,
@@ -16,6 +24,7 @@ import {
   type PersistedTake,
   type Problem,
   type ProblemSummary,
+  type RunCaseResult,
   type StudentRunResult,
   type TurnStage,
 } from './api'
@@ -57,11 +66,33 @@ function difficultyClass(d: string): string {
   return 'medium'
 }
 
+function officialCases(res: StudentRunResult): RunCaseResult[] {
+  return res.cases.filter((c) => !c.stress)
+}
+
+function stressCases(res: StudentRunResult): RunCaseResult[] {
+  return res.cases.filter((c) => c.stress)
+}
+
 function takeAllPass(t: PersistedTake): boolean {
   const res = t.results
-  return (
-    res != null && !res.error && res.cases.length > 0 && res.cases.every((c) => c.pass)
-  )
+  if (res == null || res.error) return false
+  const official = officialCases(res)
+  return official.length > 0 && official.every((c) => c.pass)
+}
+
+function takeScoreLabel(t: PersistedTake, knownTotal: number | null): string {
+  const res = t.results
+  if (res == null || res.error) {
+    return knownTotal == null ? '–/–' : `–/${knownTotal}`
+  }
+  const official = officialCases(res)
+  const tougher = stressCases(res)
+  const oPass = official.filter((c) => c.pass).length
+  const base = `${oPass}/${official.length}`
+  if (tougher.length === 0) return base
+  const tPass = tougher.filter((c) => c.pass).length
+  return `${base} · ${tPass}/${tougher.length} tough`
 }
 
 function LoadingBoard({ query, ingesting }: { query: string; ingesting: boolean }) {
@@ -171,20 +202,56 @@ function RevealingText({
   )
 }
 
-function reviewPrompt(code: string, run?: StudentRunResult | null): string {
+const MARGIN_WIDTH_KEY = 'the-board:margin-width'
+const MARGIN_MIN_PX = 240
+const DESK_MIN_PX = 420
+const COMPOSER_LINE_PX = 22 // ~14.5px * 1.5
+const COMPOSER_PAD_PX = 16 // vertical padding inside the chalk field
+const COMPOSER_MIN_PX = COMPOSER_LINE_PX * 2 + COMPOSER_PAD_PX
+const COMPOSER_AUTO_MAX_PX = COMPOSER_LINE_PX * 6 + COMPOSER_PAD_PX
+const COMPOSER_MANUAL_MAX_PX = COMPOSER_LINE_PX * 16 + COMPOSER_PAD_PX
+
+function defaultMarginWidth(viewport = typeof window !== 'undefined' ? window.innerWidth : 1200): number {
+  return Math.round(viewport * 0.25)
+}
+
+function clampMarginWidth(
+  px: number,
+  viewport = typeof window !== 'undefined' ? window.innerWidth : 1200,
+): number {
+  const max = Math.max(MARGIN_MIN_PX, Math.min(Math.round(viewport * 0.5), viewport - DESK_MIN_PX))
+  return Math.min(max, Math.max(MARGIN_MIN_PX, Math.round(px)))
+}
+
+function readStoredMarginWidth(): number {
+  try {
+    const raw = localStorage.getItem(MARGIN_WIDTH_KEY)
+    if (raw != null) {
+      const n = Number(raw)
+      if (Number.isFinite(n)) return clampMarginWidth(n)
+    }
+  } catch {
+    /* private mode / blocked storage */
+  }
+  return clampMarginWidth(defaultMarginWidth())
+}
+
+function persistMarginWidth(px: number) {
+  try {
+    localStorage.setItem(MARGIN_WIDTH_KEY, String(px))
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Hidden payload for review-my-work. Transcript still shows the short label. */
+function reviewPrompt(notes?: string): string {
   let prompt =
-    "Here's my current code. Review it and push me one step forward — point out " +
-    'what to reconsider, but do NOT give me the answer or write the fix:\n\n' +
-    code
-  if (run && !run.error && run.cases.length > 0) {
-    const lines = run.cases.map((c) => {
-      const status = c.pass ? 'PASS' : 'FAIL'
-      if (c.error) return `${status} ${c.display} (${c.error})`
-      return `${status} ${c.display} (got ${c.got}, expected ${c.expected})`
-    })
-    prompt += `\n\nMy latest test run:\n${lines.join('\n')}`
-  } else if (run?.error) {
-    prompt += `\n\nMy latest test run:\nERROR ${run.error}`
+    'Please review my current board and push me one step forward — point out ' +
+    'what to reconsider, but do NOT give me the answer or write the fix.'
+  const noteText = notes?.trim()
+  if (noteText) {
+    prompt += `\n\nMy notes:\n${noteText}`
   }
   return prompt
 }
@@ -230,6 +297,7 @@ export default function App() {
   const [takes, setTakes] = useState<PersistedTake[]>([])
   const [selectedTake, setSelectedTake] = useState<number | null>(null)
   const [running, setRunning] = useState(false)
+  const [stressing, setStressing] = useState(false)
   const [attemptsCollapsed, setAttemptsCollapsed] = useState(false)
   const [sessionSolved, setSessionSolved] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -237,7 +305,12 @@ export default function App() {
   const [settingsBackends, setSettingsBackends] = useState<string[]>([])
   const [settingsError, setSettingsError] = useState<string | null>(null)
   const [settingsSaving, setSettingsSaving] = useState(false)
+  const [marginWidth, setMarginWidth] = useState(readStoredMarginWidth)
+  const [composerHeight, setComposerHeight] = useState(COMPOSER_MIN_PX)
+  const [composerManual, setComposerManual] = useState(false)
   const notesRef = useRef<HTMLDivElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const editorSaveRef = useRef<Promise<void>>(Promise.resolve())
   const savedLangRef = useRef(lang)
 
   function refreshProblems() {
@@ -302,14 +375,130 @@ export default function App() {
     scrollNotes()
   }, [notes, busy, stage])
 
+  // Keep the margin usable when the window shrinks/grows.
+  useEffect(() => {
+    function onResize() {
+      setMarginWidth((w) => {
+        const next = clampMarginWidth(w)
+        if (next !== w) persistMarginWidth(next)
+        return next
+      })
+    }
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  // Auto-grow the composer until the user has manually sized it.
+  useEffect(() => {
+    if (composerManual) return
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = '0px'
+    const next = Math.min(COMPOSER_AUTO_MAX_PX, Math.max(COMPOSER_MIN_PX, el.scrollHeight))
+    el.style.height = `${next}px`
+    setComposerHeight(next)
+  }, [input, composerManual, sessionId])
+
+  function setMarginWidthPersist(px: number) {
+    const next = clampMarginWidth(px)
+    setMarginWidth(next)
+    persistMarginWidth(next)
+  }
+
+  function resetComposerSize() {
+    setComposerManual(false)
+    setComposerHeight(COMPOSER_MIN_PX)
+  }
+
+  function onMarginPointerDown(e: ReactPointerEvent<HTMLDivElement>) {
+    if (e.button !== 0) return
+    e.preventDefault()
+    const handle = e.currentTarget
+    const startX = e.clientX
+    const startW = marginWidth
+    let latest = startW
+    handle.setPointerCapture(e.pointerId)
+
+    function onMove(ev: PointerEvent) {
+      // Dragging the left edge leftward widens the margin.
+      latest = clampMarginWidth(startW + (startX - ev.clientX))
+      setMarginWidth(latest)
+    }
+    function onUp(ev: PointerEvent) {
+      handle.releasePointerCapture(ev.pointerId)
+      handle.removeEventListener('pointermove', onMove)
+      handle.removeEventListener('pointerup', onUp)
+      handle.removeEventListener('pointercancel', onUp)
+      persistMarginWidth(latest)
+    }
+    handle.addEventListener('pointermove', onMove)
+    handle.addEventListener('pointerup', onUp)
+    handle.addEventListener('pointercancel', onUp)
+  }
+
+  function onMarginKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    const step = e.shiftKey ? 40 : 16
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault()
+      setMarginWidthPersist(marginWidth + step)
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault()
+      setMarginWidthPersist(marginWidth - step)
+    } else if (e.key === 'Home') {
+      e.preventDefault()
+      setMarginWidthPersist(MARGIN_MIN_PX)
+    } else if (e.key === 'End') {
+      e.preventDefault()
+      setMarginWidthPersist(window.innerWidth * 0.5)
+    }
+  }
+
+  function onComposerDragStart(e: ReactPointerEvent<HTMLDivElement>) {
+    if (e.button !== 0) return
+    e.preventDefault()
+    const handle = e.currentTarget
+    const startY = e.clientY
+    const startH = composerHeight
+    handle.setPointerCapture(e.pointerId)
+    setComposerManual(true)
+
+    function onMove(ev: PointerEvent) {
+      // Dragging the top edge upward grows the field.
+      const next = Math.min(
+        COMPOSER_MANUAL_MAX_PX,
+        Math.max(COMPOSER_MIN_PX, startH + (startY - ev.clientY)),
+      )
+      setComposerHeight(next)
+    }
+    function onUp(ev: PointerEvent) {
+      handle.releasePointerCapture(ev.pointerId)
+      handle.removeEventListener('pointermove', onMove)
+      handle.removeEventListener('pointerup', onUp)
+      handle.removeEventListener('pointercancel', onUp)
+    }
+    handle.addEventListener('pointermove', onMove)
+    handle.addEventListener('pointerup', onUp)
+    handle.addEventListener('pointercancel', onUp)
+  }
+
+  function queueEditorSave(id: string, nextCode: string, nextLang: string): Promise<void> {
+    const queued = editorSaveRef.current
+      .catch(() => {})
+      .then(() => saveEditor(id, nextCode, nextLang))
+    editorSaveRef.current = queued.catch(() => {})
+    return queued
+  }
+
   // Debounced editor sync while a session is active.
   useEffect(() => {
     if (!sessionId) return
     const timer = setTimeout(() => {
       if (!code && lang === savedLangRef.current) return
-      void saveEditor(sessionId, code, lang).then(() => {
-        savedLangRef.current = lang
-      })
+      void queueEditorSave(sessionId, code, lang)
+        .then(() => {
+          savedLangRef.current = lang
+        })
+        .catch(() => {})
     }, 2000)
     return () => clearTimeout(timer)
   }, [code, lang, sessionId])
@@ -334,8 +523,15 @@ export default function App() {
   const scaffoldDirty =
     Boolean(sessionId) &&
     normalizeForDirty(code) !== normalizeForDirty(snippetFor(problem, lang))
-  const caseTotal =
-    takes.find((t) => t.results && t.results.cases.length > 0)?.results?.cases.length ?? null
+  const stressCount = problem?.stressCount ?? 0
+  let knownTotal: number | null = null
+  for (let i = takes.length - 1; i >= 0; i--) {
+    const res = takes[i]!.results
+    if (res != null && !res.error) {
+      knownTotal = officialCases(res).length
+      break
+    }
+  }
   const solved =
     sessionSolved || takes.some(takeAllPass)
 
@@ -436,6 +632,8 @@ export default function App() {
     setBusy(true)
     setStage(null)
     try {
+      await queueEditorSave(sessionId, code, lang)
+      savedLangRef.current = lang
       const r = await submitTurn(sessionId, sendText, {
         display: displayText,
         onStage: setStage,
@@ -467,14 +665,18 @@ export default function App() {
     const t = input.trim()
     if (!t) return
     setInput('')
+    resetComposerSize()
     void turn(t)
   }
 
   function review() {
     const c = code.trim()
     if (!c || busy) return
-    const newestWithResults = [...takes].reverse().find((t) => t.results != null)
-    void turn(reviewPrompt(c, newestWithResults?.results), '↳ review my work')
+    const notes = input.trim()
+    setInput('')
+    resetComposerSize()
+    const display = notes ? '↳ review my work\n' + notes : '↳ review my work'
+    void turn(reviewPrompt(notes), display)
   }
 
   async function runTheExamples() {
@@ -490,6 +692,20 @@ export default function App() {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
       setRunning(false)
+    }
+  }
+
+  async function chalkUpTougher() {
+    if (!sessionId || stressing || stressCount > 0) return
+    setStressing(true)
+    setError(null)
+    try {
+      const { count } = await chalkStress(sessionId)
+      setProblem((p) => (p ? { ...p, stressCount: count } : p))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setStressing(false)
     }
   }
 
@@ -557,6 +773,10 @@ export default function App() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [settingsOpen])
+
+  const marginMax = clampMarginWidth(
+    typeof window !== 'undefined' ? window.innerWidth * 0.5 : marginWidth,
+  )
 
   const inDesktop = typeof window !== 'undefined' && Boolean(window.tutorDesktop)
 
@@ -672,7 +892,7 @@ export default function App() {
 
       {error && <div className="banner">{error}</div>}
 
-      <div className="stage">
+      <div className="stage" style={{ gridTemplateColumns: `1fr ${marginWidth}px` }}>
         <main className="desk">
           {loading ? (
             <LoadingBoard query={loadingQuery} ingesting={ingesting} />
@@ -732,6 +952,19 @@ export default function App() {
                         <span>{running ? 'running…' : 'run'}</span>
                       </button>
                     )}
+                    {sessionId && stressCount === 0 && (
+                      <button
+                        type="button"
+                        className="stressbtn"
+                        disabled={stressing}
+                        onClick={() => void chalkUpTougher()}
+                      >
+                        {stressing ? 'chalking…' : 'chalk up tougher cases'}
+                      </button>
+                    )}
+                    {sessionId && stressCount > 0 && (
+                      <span className="stress-count">{stressCount} tougher</span>
+                    )}
                     <select className="langpick" value={lang} onChange={(e) => changeLang(e.target.value)}>
                       {LANGS.map((l) => (
                         <option key={l} value={l}>
@@ -778,22 +1011,12 @@ export default function App() {
                         <div className="attempts-list">
                           {takes.map((t) => {
                             const res = t.results
-                            const total = res?.cases.length ?? caseTotal
-                            const pass =
-                              res && !res.error
-                                ? res.cases.filter((c) => c.pass).length
-                                : null
-                            const score =
-                              res == null || res.error
-                                ? total == null
-                                  ? '–/–'
-                                  : `–/${total}`
-                                : `${pass}/${total}`
+                            const score = takeScoreLabel(t, knownTotal)
                             const allPass = takeAllPass(t)
                             const someFail =
                               res != null &&
                               !res.error &&
-                              res.cases.some((c) => !c.pass)
+                              officialCases(res).some((c) => !c.pass)
                             const rowClass = [
                               'attempt-row',
                               t.seq === selectedTake ? 'selected' : '',
@@ -832,21 +1055,44 @@ export default function App() {
                     ) : selectedResults.error ? (
                       <div className="fail">{selectedResults.error}</div>
                     ) : (
-                      selectedResults.cases.map((c, i) => (
-                        <div key={i} className={c.pass ? 'pass' : 'fail'}>
-                          <span className="mark">{c.pass ? '✓' : '✗'}</span>
-                          <span className="disp">{c.display}</span>
-                          {!c.pass &&
-                            (c.error ? (
-                              <span className="detail"> → {c.error}</span>
-                            ) : (
-                              <span className="detail">
-                                {' '}
-                                → got {c.got} (want {c.expected})
-                              </span>
-                            ))}
-                        </div>
-                      ))
+                      (() => {
+                        const official = officialCases(selectedResults)
+                        const tougher = stressCases(selectedResults)
+                        const renderRow = (c: RunCaseResult, i: number, stress: boolean) => (
+                          <div
+                            key={`${stress ? 's' : 'o'}-${i}`}
+                            className={`${c.pass ? 'pass' : 'fail'}${stress ? ' stress-row' : ''}`}
+                          >
+                            <span className="mark">{c.pass ? '✓' : '✗'}</span>
+                            <span className="disp">{c.display}</span>
+                            {!c.pass &&
+                              (c.error ? (
+                                <span className="detail"> → {c.error}</span>
+                              ) : (
+                                <span className="detail">
+                                  {' '}
+                                  → got {c.got} (want {c.expected})
+                                </span>
+                              ))}
+                          </div>
+                        )
+                        return (
+                          <>
+                            {official.length > 0 && (
+                              <div className="case-group">
+                                <div className="case-group-label">examples</div>
+                                {official.map((c, i) => renderRow(c, i, false))}
+                              </div>
+                            )}
+                            {tougher.length > 0 && (
+                              <div className="case-group stress-group">
+                                <div className="case-group-label">tougher</div>
+                                {tougher.map((c, i) => renderRow(c, i, true))}
+                              </div>
+                            )}
+                          </>
+                        )
+                      })()
                     )}
                   </div>
                 )}
@@ -953,6 +1199,18 @@ export default function App() {
         </main>
 
         <aside className="margin">
+          <div
+            className="margin-resize"
+            role="separator"
+            aria-orientation="vertical"
+            aria-valuenow={marginWidth}
+            aria-valuemin={MARGIN_MIN_PX}
+            aria-valuemax={marginMax}
+            aria-label="tutor margin"
+            tabIndex={0}
+            onPointerDown={onMarginPointerDown}
+            onKeyDown={onMarginKeyDown}
+          />
           <div className="margin-head">
             <span className="m1">the tutor</span>
             <span className="m2">in the margin</span>
@@ -984,7 +1242,20 @@ export default function App() {
                     onGrow={scrollNotes}
                   />
                 ) : (
-                  <p className="say">{n.role === 'tutor' ? renderMd(parseMd(n.text)) : n.text}</p>
+                  <p className="say">
+                    {n.role === 'tutor' ? (
+                      renderMd(parseMd(n.text))
+                    ) : (() => {
+                      const nl = n.text.startsWith('↳') ? n.text.indexOf('\n') : -1
+                      if (nl < 0) return n.text
+                      return (
+                        <>
+                          {n.text.slice(0, nl)}
+                          <span className="say-sub">{n.text.slice(nl + 1)}</span>
+                        </>
+                      )
+                    })()}
+                  </p>
                 )}
                 {!n.revealing && n.unlocked && n.unlocked.length > 0 && (
                   <p className="unlocked">
@@ -1009,15 +1280,24 @@ export default function App() {
                 ✎ review my work
               </button>
             )}
-            <div className="row">
+            <div className="row composer-field chalk lit">
+              <div
+                className="composer-drag"
+                onPointerDown={onComposerDragStart}
+                aria-hidden="true"
+              />
               <textarea
+                ref={textareaRef}
                 rows={2}
                 value={input}
                 disabled={!sessionId || busy}
                 placeholder={sessionId ? 'say what you’re thinking…' : 'load a problem first'}
+                style={{ height: composerHeight }}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={onKey}
               />
+            </div>
+            <div className="row">
               <button className="send" type="button" onClick={send} disabled={!sessionId || busy || !input.trim()}>
                 Send
               </button>

@@ -10,6 +10,8 @@ export interface Problem {
   constraints: string
   difficulty?: string
   codeSnippets?: CodeSnippet[]
+  /** Count of cached tougher cases — never the rows themselves. */
+  stressCount?: number
 }
 
 export type ProblemStatus = 'new' | 'attempted' | 'solved'
@@ -45,6 +47,7 @@ export type RunCaseResult = {
   got: string
   pass: boolean
   error?: string
+  stress?: boolean
 }
 
 export type StudentRunResult = { cases: RunCaseResult[]; error?: string }
@@ -106,14 +109,10 @@ export async function getSession(id: string): Promise<ResumePayload> {
 }
 
 export async function saveEditor(id: string, code: string, lang: string): Promise<void> {
-  try {
-    await request<void>(`/api/session/${id}/editor`, {
-      method: 'PUT',
-      body: JSON.stringify({ code, lang }),
-    })
-  } catch {
-    // fire-and-forget; swallow errors
-  }
+  await request<void>(`/api/session/${id}/editor`, {
+    method: 'PUT',
+    body: JSON.stringify({ code, lang }),
+  })
 }
 
 export async function createSession(
@@ -225,6 +224,15 @@ export async function addTake(
   return request<{ takes: PersistedTake[] }>(`/api/session/${sessionId}/take`, {
     method: 'POST',
     body: JSON.stringify({ code, lang }),
+  })
+}
+
+export async function chalkStress(
+  sessionId: string,
+): Promise<{ count: number }> {
+  return request<{ count: number }>(`/api/session/${sessionId}/stress`, {
+    method: 'POST',
+    body: JSON.stringify({}),
   })
 }
 

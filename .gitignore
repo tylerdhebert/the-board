@@ -8,7 +8,9 @@ _*.txt
 *.tmp
 logs/
 server/.lsp-scratch/
+server/.lsp-scratch-py/
 server/.run-scratch/
+server/.teacher-scratch/
 sessions/
 sessions.migrated/
 tutor.db

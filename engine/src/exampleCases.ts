@@ -1,7 +1,13 @@
 import { spawn } from 'node:child_process';
 import { killTree } from './llm.js';
 
-export type CaseSpec = { display: string; args: unknown[]; expected: unknown };
+export type CaseSpec = {
+  display: string;
+  args: unknown[];
+  expected: unknown;
+  /** True for cached tougher cases; official examples are false/omitted. */
+  stress?: boolean;
+};
 
 const EXTRACT_TIMEOUT_MS = 10_000;
 // After a timeout kill, how long to keep waiting for 'close' before settling
@@ -38,6 +44,7 @@ print(json.dumps(out))
 
 export async function extractCases(
   examples: { input: string; output: string }[],
+  opts?: { stress?: boolean },
 ): Promise<CaseSpec[]> {
   const script = buildExtractScript(examples);
 
@@ -124,9 +131,15 @@ export async function extractCases(
     throw new Error('extractCases: expected a JSON array');
   }
 
+  const stress = opts?.stress === true;
   return parsed.map((row, i) => {
     const r = row as { args: unknown[]; expected: unknown };
     const display = examples[i]?.input ?? `case ${i}`;
-    return { display, args: r.args, expected: r.expected };
+    return {
+      display,
+      args: r.args,
+      expected: r.expected,
+      ...(stress ? { stress: true } : { stress: false }),
+    };
   });
 }

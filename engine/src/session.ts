@@ -1,7 +1,7 @@
 import { gateCheck } from './gate.js';
 import type { LLMClient } from './llm.js';
 import { createClient } from './providers.js';
-import { teacherTurn } from './teacher.js';
+import { teacherTurn, type TeacherTurnContext } from './teacher.js';
 import { NullTracer, TracingLLMClient, type Tracer } from './trace.js';
 import type { GateVerdict, Message, ProblemCard, TutorMode } from './types.js';
 import { judgeUnlock } from './unlockJudge.js';
@@ -18,6 +18,10 @@ export interface TurnResult {
   redrafted: boolean;
   unlockedThisTurn: string[];
 }
+
+/** Optional board context for the teacher only (cwd + rendered BOARD lines). */
+export type SubmitTurnContext = TeacherTurnContext;
+
 
 function tokenize(text: string): string[] {
   return text
@@ -85,7 +89,11 @@ export class TutorSession {
     return this.turnCounter;
   }
 
-  async submit(studentMessage: string, onStage?: (stage: TurnStage) => void): Promise<TurnResult> {
+  async submit(
+    studentMessage: string,
+    onStage?: (stage: TurnStage) => void,
+    turnContext?: SubmitTurnContext,
+  ): Promise<TurnResult> {
     const turn = ++this.turnCounter;
     const lockedBefore = [...this._lockedTerms];
 
@@ -115,6 +123,8 @@ export class TutorSession {
     onStage?.('draft');
     let t = await teacherTurn(
       this.teacherClient, this.card, this._transcript, this._lockedTerms, this.models.teacher.model,
+      undefined,
+      turnContext,
     );
     onStage?.('gate');
     let verdict = await gateCheck(
@@ -127,6 +137,7 @@ export class TutorSession {
       t = await teacherTurn(
         this.teacherClient, this.card, this._transcript, this._lockedTerms, this.models.teacher.model,
         { rejectedDraft: t.reply, note: verdict.note },
+        turnContext,
       );
       onStage?.('gate');
       verdict = await gateCheck(

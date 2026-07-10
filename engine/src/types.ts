@@ -15,6 +15,8 @@ export interface ProblemCard {
   leak_terms: string[];
   underlying_primitive: string;
   examples: Example[];
+  /** Cached tougher cases; oracle outputs from the verified Python reference. */
+  stress?: Example[];
 }
 export type TutorMode = 'socratic' | 'analog' | 'scaffold';
 export type GateOffense = 'leak' | 'wrong-endorsement' | 'premature-bridge' | 'premature-answer' | 'none';
