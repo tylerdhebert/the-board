@@ -2,12 +2,13 @@ import { access, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  CodexCliClient,
+  createClient,
   JsonlTracer,
   TutorSession,
   fetchProblem,
   slugFromUrl,
   type CodeSnippet,
+  type LLMClient,
   type Message,
   type ProblemCard,
   type SessionModels,
@@ -16,7 +17,7 @@ import { ingest } from '../../engine/src/ingest.js';
 import { extractCases, type CaseSpec } from '../../engine/src/exampleCases.js';
 import { runStudentCode, type StudentRunResult } from '../../engine/src/runStudentCode.js';
 
-export { TutorSession, extractCases, runStudentCode, JsonlTracer };
+export { TutorSession, extractCases, runStudentCode, JsonlTracer, createClient };
 export type { CodeSnippet, Message, ProblemCard, SessionModels, CaseSpec, StudentRunResult };
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -79,7 +80,7 @@ export async function loadSnippets(name: string): Promise<CodeSnippet[]> {
 
 export async function getOrIngestCard(
   query: string,
-  model = 'gpt-5.5',
+  opts?: { client?: LLMClient; model?: string },
 ): Promise<{ card: ProblemCard; verified: boolean; cached: boolean; snippets: CodeSnippet[] }> {
   const slug = toSlug(query);
   assertSafeCardName(slug);
@@ -104,7 +105,8 @@ export async function getOrIngestCard(
     throw new Error(`failed to fetch problem "${slug}": ${message}`);
   }
 
-  const client = new CodexCliClient();
+  const model = opts?.model ?? 'gpt-5.5';
+  const client = opts?.client ?? createClient('codex');
   const { card, verification } = await ingest(client, problem.statement, model);
   await writeFile(cachePath, JSON.stringify(card, null, 2) + '\n', 'utf8');
   await writeFile(snippetsPath, JSON.stringify(problem.codeSnippets, null, 2) + '\n', 'utf8');

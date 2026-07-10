@@ -135,10 +135,18 @@ export class ClaudeCliClient implements LLMClient {
   }
 }
 
+/** Some CLIs (claude) wrap JSON answers in markdown fences — unwrap before parsing. */
+function stripMarkdownFences(raw: string): string {
+  const trimmed = raw.trim();
+  const fenced = /^```(?:json)?\s*\n?([\s\S]*?)\n?```$/.exec(trimmed);
+  return fenced ? fenced[1]!.trim() : trimmed;
+}
+
 export async function completeJson<T>(client: LLMClient, req: LLMRequest): Promise<T> {
   const raw = await client.complete(req);
+  const cleaned = stripMarkdownFences(raw);
   try {
-    return JSON.parse(raw) as T;
+    return JSON.parse(cleaned) as T;
   } catch {
     throw new Error(`Failed to parse JSON from LLM output: ${raw.slice(0, 400)}`);
   }

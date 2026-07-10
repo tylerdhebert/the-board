@@ -179,3 +179,37 @@ export async function runExamples(
     body: JSON.stringify({ code, language }),
   })
 }
+
+export type RoleModels = { backend: string; model: string }
+export type AppSettingsModels = {
+  teacher: RoleModels
+  gate: RoleModels
+  unlock: RoleModels
+  ingest: RoleModels
+}
+
+export async function getSettings(): Promise<{
+  models: AppSettingsModels
+  backends: string[]
+}> {
+  return request<{ models: AppSettingsModels; backends: string[] }>('/api/settings')
+}
+
+export async function putSettings(models: AppSettingsModels): Promise<void> {
+  const res = await fetch('/api/settings', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ models }),
+  })
+  if (res.status === 204) return
+  if (!res.ok) {
+    let message = `Request failed: ${res.status}`
+    try {
+      const body = (await res.json()) as { error?: string }
+      if (body.error) message = body.error
+    } catch {
+      // keep status message
+    }
+    throw new Error(message)
+  }
+}

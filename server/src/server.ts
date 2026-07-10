@@ -5,9 +5,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { URL } from 'node:url';
 import {
-  DEFAULT_MODELS,
   JsonlTracer,
   TutorSession,
+  createClient,
   extractCases,
   getOrIngestCard,
   listCards,
@@ -28,6 +28,7 @@ import {
   saveSession,
   type PersistedSession,
 } from './sessionStore.js';
+import { loadSettings, saveSettings, type AppSettings } from './settings.js';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -109,9 +110,14 @@ async function readJsonBody(req: http.IncomingMessage): Promise<unknown> {
 async function newEntry(card: ProblemCard, cardName: string): Promise<SessionEntry> {
   const sessionId = randomUUID();
   const now = new Date().toISOString();
-  const session = new TutorSession(card, DEFAULT_MODELS, {
-    tracer: sessionTracer(sessionId),
-  });
+  const { models } = await loadSettings();
+  const session = new TutorSession(
+    card,
+    { teacher: models.teacher, gate: models.gate, unlock: models.unlock },
+    {
+      tracer: sessionTracer(sessionId),
+    },
+  );
   const persisted: PersistedSession = {
     id: sessionId,
     cardName,
@@ -142,10 +148,15 @@ async function getOrRestore(id: string): Promise<SessionEntry | null> {
   if (!persisted) return null;
   try {
     const card = await loadCard(persisted.cardName);
-    const session = new TutorSession(card, DEFAULT_MODELS, {
-      restore: persisted.engine,
-      tracer: sessionTracer(id),
-    });
+    const { models } = await loadSettings();
+    const session = new TutorSession(
+      card,
+      { teacher: models.teacher, gate: models.gate, unlock: models.unlock },
+      {
+        restore: persisted.engine,
+        tracer: sessionTracer(id),
+      },
+    );
     const entry: SessionEntry = {
       session,
       card,
@@ -253,6 +264,29 @@ async function handle(
     return;
   }
 
+  if (method === 'GET' && pathname === '/api/settings') {
+    const settings = await loadSettings();
+    sendJson(res, 200, { models: settings.models, backends: ['codex', 'claude'] });
+    return;
+  }
+
+  if (method === 'PUT' && pathname === '/api/settings') {
+    const body = (await readJsonBody(req)) as { models?: AppSettings['models'] };
+    if (!body.models) {
+      sendJson(res, 400, { error: 'models is required' });
+      return;
+    }
+    try {
+      await saveSettings({ models: body.models });
+      res.writeHead(204, CORS);
+      res.end();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      sendJson(res, 400, { error: message });
+    }
+    return;
+  }
+
   if (method === 'POST' && pathname === '/api/session') {
     const body = (await readJsonBody(req)) as { cardName?: string };
     const cardName = body.cardName;
@@ -286,7 +320,12 @@ async function handle(
       return;
     }
     try {
-      const { card, cached, snippets } = await getOrIngestCard(query);
+      const settings = await loadSettings();
+      const ingest = settings.models.ingest;
+      const { card, cached, snippets } = await getOrIngestCard(query, {
+        client: createClient(ingest.backend),
+        model: ingest.model,
+      });
       const entry = await newEntry(card, toSlug(query));
       sendJson(res, 200, {
         sessionId: entry.persisted.id,

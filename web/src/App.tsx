@@ -5,10 +5,13 @@ import {
   createSession,
   getProblems,
   getSession,
+  getSettings,
+  putSettings,
   runExamples,
   saveEditor,
   startSession,
   submitTurn,
+  type AppSettingsModels,
   type Problem,
   type ProblemSummary,
   type StudentRunResult,
@@ -200,6 +203,11 @@ export default function App() {
   const [error, setError] = useState<string | null>(null)
   const [run, setRun] = useState<StudentRunResult | null>(null)
   const [running, setRunning] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settingsModels, setSettingsModels] = useState<AppSettingsModels | null>(null)
+  const [settingsBackends, setSettingsBackends] = useState<string[]>([])
+  const [settingsError, setSettingsError] = useState<string | null>(null)
+  const [settingsSaving, setSettingsSaving] = useState(false)
   const notesRef = useRef<HTMLDivElement>(null)
   const savedLangRef = useRef(lang)
 
@@ -210,6 +218,46 @@ export default function App() {
   useEffect(() => {
     refreshProblems()
   }, [])
+
+  async function openSettings() {
+    setSettingsError(null)
+    setSettingsOpen(true)
+    setSettingsModels(null)
+    try {
+      const res = await getSettings()
+      setSettingsModels(res.models)
+      setSettingsBackends(res.backends)
+    } catch (err) {
+      setSettingsError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  function closeSettings() {
+    setSettingsOpen(false)
+    setSettingsError(null)
+    setSettingsModels(null)
+  }
+
+  async function saveSettingsPanel() {
+    if (!settingsModels || settingsSaving) return
+    setSettingsSaving(true)
+    setSettingsError(null)
+    try {
+      await putSettings(settingsModels)
+      closeSettings()
+    } catch (err) {
+      setSettingsError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSettingsSaving(false)
+    }
+  }
+
+  function patchRole(
+    role: keyof AppSettingsModels,
+    patch: Partial<AppSettingsModels[keyof AppSettingsModels]>,
+  ) {
+    setSettingsModels((cur) => (cur ? { ...cur, [role]: { ...cur[role], ...patch } } : cur))
+  }
 
   // Returning to the hero — refresh the ledger.
   useEffect(() => {
@@ -413,6 +461,15 @@ export default function App() {
     if (e.key === 'Enter') void loadProblem()
   }
 
+  useEffect(() => {
+    if (!settingsOpen) return
+    function onKey(e: globalThis.KeyboardEvent) {
+      if (e.key === 'Escape') closeSettings()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [settingsOpen])
+
   const inDesktop = typeof window !== 'undefined' && Boolean(window.tutorDesktop)
 
   return (
@@ -464,8 +521,65 @@ export default function App() {
             {loading ? 'chalking…' : 'to the board'}
           </button>
         </div>
+        <button type="button" className="stripbtn" onClick={() => void openSettings()}>
+          providers
+        </button>
         <WindowControls />
       </header>
+
+      {settingsOpen && (
+        <div
+          className="settings-backdrop"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closeSettings()
+          }}
+        >
+          <div className="settings-panel chalk lit" role="dialog" aria-label="providers">
+            <p className="eyebrow">providers</p>
+            {settingsModels ? (
+              (['teacher', 'gate', 'unlock', 'ingest'] as const).map((role) => (
+                <div key={role} className="settings-row">
+                  <span className="role">{role}</span>
+                  <select
+                    value={settingsModels[role].backend}
+                    onChange={(e) => patchRole(role, { backend: e.target.value })}
+                  >
+                    {settingsBackends.map((b) => (
+                      <option key={b} value={b}>
+                        {b}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    value={settingsModels[role].model}
+                    onChange={(e) => patchRole(role, { model: e.target.value })}
+                    spellCheck={false}
+                  />
+                </div>
+              ))
+            ) : (
+              !settingsError && <p className="settings-note">loading…</p>
+            )}
+            <p className="settings-note">
+              applies to new turns · the chosen cli must be on your PATH
+            </p>
+            {settingsError && <p className="settings-error">{settingsError}</p>}
+            <div className="settings-actions">
+              <button type="button" className="settings-cancel" onClick={closeSettings}>
+                cancel
+              </button>
+              <button
+                type="button"
+                className="settings-save"
+                disabled={!settingsModels || settingsSaving}
+                onClick={() => void saveSettingsPanel()}
+              >
+                {settingsSaving ? 'saving…' : 'save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {error && <div className="banner">{error}</div>}
 
