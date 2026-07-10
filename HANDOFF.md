@@ -166,6 +166,12 @@ restart 8787 to pick it up (tsx isn't in watch mode). Web changes hot-reload.
    Plus: editor now flexes to fill the window (was fixed 320px + dead band).
 11. **THE PLAN (agreed 2026-07-10 morning, user's priorities — next sessions
    work top-down):**
+   - **NOTE: the working tree has UNCOMMITTED user experiments** in
+     web/src/App.tsx + index.css (textarea rows=6, full-width Send on its own
+     row, margin 400px → 25vw). They are the user's live prototype of Round
+     A's ergonomics — treat them as design intent, implement properly
+     (auto-grow + cap + top drag handle; resizable margin), then supersede
+     them. Do NOT blindly discard.
    - **Round A (first, tonight-sized):**
      (a) BUG: run that times out (infinite loop) leaves a sticky "running…"
      state after the error — repro live, likely error-path response-shape
