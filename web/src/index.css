@@ -662,9 +662,9 @@ body::before {
 /* vocabulary — chalk-framed board section with multi-column terms */
 .problem.has-vocab {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(260px, 34%, 400px);
+  grid-template-columns: minmax(0, 700px) minmax(280px, 1fr);
   column-gap: 28px;
-  max-width: min(100%, 1140px);
+  max-width: none;
 }
 .problem.has-vocab > .eyebrow,
 .problem.has-vocab > .problem-title-row {
@@ -756,7 +756,7 @@ body::before {
   opacity: 1;
 }
 .vocab-words {
-  column-count: 2;
+  column-width: 150px;
   column-gap: 22px;
 }
 .vocab-word {
@@ -813,9 +813,6 @@ body::before {
   }
   .problem.has-vocab > .vocab {
     margin-top: 22px;
-  }
-  .vocab-words {
-    column-count: 3;
   }
 }
 
