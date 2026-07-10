@@ -8,6 +8,7 @@ export interface Problem {
   title: string
   statement: string
   constraints: string
+  difficulty?: string
   codeSnippets?: CodeSnippet[]
 }
 
@@ -25,6 +26,7 @@ export interface ProblemSessionRef {
 export interface ProblemSummary {
   name: string
   title: string
+  difficulty?: string
   status: ProblemStatus
   sessions: ProblemSessionRef[]
 }

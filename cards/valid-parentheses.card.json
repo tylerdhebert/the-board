@@ -68,5 +68,6 @@
       "input": "is_valid_parentheses('([)]')",
       "output": "False"
     }
-  ]
+  ],
+  "difficulty": "Easy"
 }

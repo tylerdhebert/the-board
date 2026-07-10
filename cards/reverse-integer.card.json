@@ -68,5 +68,6 @@
       "input": "reverse_integer(1534236469)",
       "output": "0"
     }
-  ]
+  ],
+  "difficulty": "Medium"
 }

@@ -70,5 +70,6 @@
       "input": "two_sum([3, 3], 6)",
       "output": "[0, 1]"
     }
-  ]
+  ],
+  "difficulty": "Easy"
 }

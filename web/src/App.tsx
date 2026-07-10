@@ -21,7 +21,7 @@ import {
 } from './api'
 import WindowControls from './WindowControls'
 
-const LANGS = ['csharp', 'typescript', 'python', 'javascript', 'java', 'cpp', 'go'] as const
+const LANGS = ['csharp', 'typescript', 'python', 'javascript'] as const
 const RUNNABLE = new Set(['python', 'typescript', 'javascript', 'csharp'])
 
 // Monaco language id -> LeetCode langSlug (for picking the starter scaffold).
@@ -38,6 +38,30 @@ const LANG_SLUG: Record<string, string> = {
 function snippetFor(problem: Problem | null, lang: string): string {
   const slug = LANG_SLUG[lang] ?? lang
   return problem?.codeSnippets?.find((s) => s.langSlug === slug)?.code ?? ''
+}
+
+/** Right-trim every line, drop trailing blank lines. Indentation still counts. */
+export function normalizeForDirty(code: string): string {
+  return code
+    .split('\n')
+    .map((l) => l.replace(/\s+$/, ''))
+    .join('\n')
+    .replace(/\n+$/, '')
+}
+
+function difficultyClass(d: string): string {
+  const lower = d.toLowerCase()
+  if (lower === 'easy') return 'easy'
+  if (lower === 'medium') return 'medium'
+  if (lower === 'hard') return 'hard'
+  return 'medium'
+}
+
+function takeAllPass(t: PersistedTake): boolean {
+  const res = t.results
+  return (
+    res != null && !res.error && res.cases.length > 0 && res.cases.every((c) => c.pass)
+  )
 }
 
 function LoadingBoard({ query, ingesting }: { query: string; ingesting: boolean }) {
@@ -206,6 +230,8 @@ export default function App() {
   const [takes, setTakes] = useState<PersistedTake[]>([])
   const [selectedTake, setSelectedTake] = useState<number | null>(null)
   const [running, setRunning] = useState(false)
+  const [attemptsCollapsed, setAttemptsCollapsed] = useState(false)
+  const [sessionSolved, setSessionSolved] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsModels, setSettingsModels] = useState<AppSettingsModels | null>(null)
   const [settingsBackends, setSettingsBackends] = useState<string[]>([])
@@ -302,10 +328,16 @@ export default function App() {
   const selectedResults = selected?.results ?? null
   const dirty =
     takes.length > 0 && selected
-      ? code !== selected.code || lang !== selected.lang
+      ? normalizeForDirty(code) !== normalizeForDirty(selected.code) ||
+        lang !== selected.lang
       : false
+  const scaffoldDirty =
+    Boolean(sessionId) &&
+    normalizeForDirty(code) !== normalizeForDirty(snippetFor(problem, lang))
   const caseTotal =
     takes.find((t) => t.results && t.results.cases.length > 0)?.results?.cases.length ?? null
+  const solved =
+    sessionSolved || takes.some(takeAllPass)
 
   function applyFreshSession(res: { sessionId: string; problem: Problem }) {
     setSessionId(res.sessionId)
@@ -314,6 +346,8 @@ export default function App() {
     setInput('')
     setError(null)
     applyTakes([])
+    setSessionSolved(false)
+    setAttemptsCollapsed(false)
     const stub = snippetFor(res.problem, lang)
     setCode(stub)
     setSeed(stub)
@@ -363,6 +397,8 @@ export default function App() {
       setCode(res.code ? res.code : stub)
       setSeed(stub)
       applyTakes(res.takes)
+      setSessionSolved(res.solved || res.takes.some(takeAllPass))
+      setAttemptsCollapsed(false)
       setInput('')
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -448,6 +484,7 @@ export default function App() {
     try {
       const { takes: next } = await runExamples(sessionId, code, lang)
       applyTakes(next)
+      if (next.some(takeAllPass)) setSessionSolved(true)
       refreshProblems()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -470,6 +507,17 @@ export default function App() {
     setLang(target.lang)
   }
 
+  async function resetToScaffold() {
+    if (!sessionId || !scaffoldDirty) return
+    if (dirty) {
+      const res = await addTake(sessionId, code, lang)
+      applyTakes(res.takes)
+    }
+    const stub = snippetFor(problem, lang)
+    setCode(stub)
+    setSeed(stub)
+  }
+
   function onLedgerRow(p: ProblemSummary) {
     if (p.status === 'new' || p.sessions.length === 0) {
       void beginCard(p.name, p.title)
@@ -481,7 +529,10 @@ export default function App() {
   function changeLang(next: string) {
     setLang(next)
     // Swap the scaffold only if the editor still holds the untouched stub (or is empty).
-    if (code === seed || code.trim() === '') {
+    if (
+      normalizeForDirty(code) === normalizeForDirty(seed) ||
+      code.trim() === ''
+    ) {
       const stub = snippetFor(problem, next)
       setCode(stub)
       setSeed(stub)
@@ -536,6 +587,7 @@ export default function App() {
             setProblem(null)
             setNotes([])
             applyTakes([])
+            setSessionSolved(false)
             setInput('')
             setError(null)
             setExpanded(null)
@@ -628,7 +680,17 @@ export default function App() {
             <>
               <article className="problem">
                 <p className="eyebrow">the problem</p>
-                <h1>{problem.title}</h1>
+                <div className="problem-title-row">
+                  <h1>{problem.title}</h1>
+                  {problem.difficulty && (
+                    <span
+                      className={`diff-badge ${difficultyClass(problem.difficulty)}`}
+                    >
+                      {problem.difficulty.toLowerCase()}
+                    </span>
+                  )}
+                  {solved && <span className="solved-stamp">solved ✓</span>}
+                </div>
                 <h2>statement</h2>
                 <p className="statement">{problem.statement}</p>
                 <h2>constraints</h2>
@@ -638,15 +700,31 @@ export default function App() {
                 <div className="worklabel">
                   <span>your work</span>
                   <div className="workactions">
-                    {RUNNABLE.has(lang) && sessionId && code.trim() && (
+                    {sessionId && code.trim() && (
                       <button
                         type="button"
                         className="runbtn"
                         disabled={running}
-                        title={dirty ? 'changes since your last take' : undefined}
+                        title={dirty ? 'changes since your last attempt' : undefined}
                         onClick={() => void runTheExamples()}
                       >
-                        {running ? 'running…' : dirty ? 'run the examples *' : 'run the examples'}
+                        <svg
+                          className="run-tri"
+                          viewBox="0 0 14 14"
+                          width="14"
+                          height="14"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M3.5 2.2v9.6L11.5 7z"
+                            fill="none"
+                            stroke="var(--amber)"
+                            strokeWidth="1.4"
+                            strokeLinejoin="round"
+                            filter="url(#chalk-rough)"
+                          />
+                        </svg>
+                        <span>{running ? 'running…' : dirty ? 'run *' : 'run'}</span>
                       </button>
                     )}
                     <select className="langpick" value={lang} onChange={(e) => changeLang(e.target.value)}>
@@ -656,80 +734,115 @@ export default function App() {
                         </option>
                       ))}
                     </select>
+                    {sessionId && (
+                      <button
+                        type="button"
+                        className="resetbtn"
+                        disabled={!scaffoldDirty}
+                        title="reset to the language scaffold"
+                        onClick={() => void resetToScaffold()}
+                      >
+                        reset
+                      </button>
+                    )}
                   </div>
                 </div>
-                <div className="editor-shell chalk lit">
-                  <div className="monaco-host">
-                    <CodeEditor value={code} onChange={setCode} language={lang} />
+                <div className={`workrow${attemptsCollapsed ? ' rail-collapsed' : ''}`}>
+                  <div className="editor-shell chalk lit">
+                    <div className="monaco-host">
+                      <CodeEditor value={code} onChange={setCode} language={lang} />
+                    </div>
                   </div>
+                  {takes.length > 0 && (
+                    <aside
+                      className={`attempts-rail${attemptsCollapsed ? ' collapsed' : ''}`}
+                    >
+                      <button
+                        type="button"
+                        className="attempts-toggle"
+                        onClick={() => setAttemptsCollapsed((v) => !v)}
+                        title={attemptsCollapsed ? 'expand attempts' : 'collapse attempts'}
+                      >
+                        {!attemptsCollapsed && <span className="attempts-eyebrow">attempts</span>}
+                        {attemptsCollapsed && (
+                          <span className="attempts-count">{takes.length}</span>
+                        )}
+                        <span className="attempts-glyph">{attemptsCollapsed ? '›' : '‹'}</span>
+                      </button>
+                      {!attemptsCollapsed && (
+                        <div className="attempts-list">
+                          {takes.map((t) => {
+                            const res = t.results
+                            const total = res?.cases.length ?? caseTotal
+                            const pass =
+                              res && !res.error
+                                ? res.cases.filter((c) => c.pass).length
+                                : null
+                            const score =
+                              res == null || res.error
+                                ? total == null
+                                  ? '–/–'
+                                  : `–/${total}`
+                                : `${pass}/${total}`
+                            const allPass = takeAllPass(t)
+                            const someFail =
+                              res != null &&
+                              !res.error &&
+                              res.cases.some((c) => !c.pass)
+                            const rowClass = [
+                              'attempt-row',
+                              t.seq === selectedTake ? 'selected' : '',
+                              res == null || res.error
+                                ? 'unrun'
+                                : allPass
+                                  ? 'allpass'
+                                  : someFail
+                                    ? 'somefail'
+                                    : '',
+                            ]
+                              .filter(Boolean)
+                              .join(' ')
+                            return (
+                              <button
+                                key={t.seq}
+                                type="button"
+                                className={rowClass}
+                                title={new Date(t.ts).toLocaleString()}
+                                onClick={() => void checkoutTake(t.seq)}
+                              >
+                                <span className="attempt-label">attempt {t.seq}</span>
+                                <span className="attempt-score">{score}</span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </aside>
+                  )}
                 </div>
                 {takes.length > 0 && (
-                  <div className="takes-rail">
-                    <div className="takes-chips">
-                      {takes.map((t) => {
-                        const res = t.results
-                        const total = res?.cases.length ?? caseTotal
-                        const pass =
-                          res && !res.error ? res.cases.filter((c) => c.pass).length : null
-                        const label =
-                          res == null
-                            ? total == null
-                              ? `take ${t.seq} · –/–`
-                              : `take ${t.seq} · –/${total}`
-                            : res.error
-                              ? `take ${t.seq} · –/${total ?? '–'}`
-                              : `take ${t.seq} · ${pass}/${total}`
-                        const allPass =
-                          res != null &&
-                          !res.error &&
-                          res.cases.length > 0 &&
-                          res.cases.every((c) => c.pass)
-                        const someFail =
-                          res != null &&
-                          !res.error &&
-                          res.cases.some((c) => !c.pass)
-                        const chipClass = [
-                          'take-chip',
-                          t.seq === selectedTake ? 'selected' : '',
-                          res == null || res.error ? 'unrun' : allPass ? 'allpass' : someFail ? 'somefail' : '',
-                        ]
-                          .filter(Boolean)
-                          .join(' ')
-                        return (
-                          <button
-                            key={t.seq}
-                            type="button"
-                            className={chipClass}
-                            onClick={() => void checkoutTake(t.seq)}
-                          >
-                            {label}
-                          </button>
-                        )
-                      })}
-                    </div>
-                    <div className="takes-cases">
-                      {selectedResults == null ? (
-                        <div className="unrun-note">no results yet — run the examples</div>
-                      ) : selectedResults.error ? (
-                        <div className="fail">{selectedResults.error}</div>
-                      ) : (
-                        selectedResults.cases.map((c, i) => (
-                          <div key={i} className={c.pass ? 'pass' : 'fail'}>
-                            <span className="mark">{c.pass ? '✓' : '✗'}</span>
-                            <span className="disp">{c.display}</span>
-                            {!c.pass &&
-                              (c.error ? (
-                                <span className="detail"> → {c.error}</span>
-                              ) : (
-                                <span className="detail">
-                                  {' '}
-                                  → got {c.got} (want {c.expected})
-                                </span>
-                              ))}
-                          </div>
-                        ))
-                      )}
-                    </div>
+                  <div className="takes-cases">
+                    {selectedResults == null ? (
+                      <div className="unrun-note">no results yet — run the examples</div>
+                    ) : selectedResults.error ? (
+                      <div className="fail">{selectedResults.error}</div>
+                    ) : (
+                      selectedResults.cases.map((c, i) => (
+                        <div key={i} className={c.pass ? 'pass' : 'fail'}>
+                          <span className="mark">{c.pass ? '✓' : '✗'}</span>
+                          <span className="disp">{c.display}</span>
+                          {!c.pass &&
+                            (c.error ? (
+                              <span className="detail"> → {c.error}</span>
+                            ) : (
+                              <span className="detail">
+                                {' '}
+                                → got {c.got} (want {c.expected})
+                              </span>
+                            ))}
+                        </div>
+                      ))
+                    )}
                   </div>
                 )}
               </section>
@@ -772,7 +885,18 @@ export default function App() {
                         >
                           <span className={`mark ${className}`}>{mark}</span>
                           <span className="title">{p.title}</span>
-                          {meta && <span className="meta">{meta}</span>}
+                          {(p.difficulty || meta) && (
+                            <span className="ledger-end">
+                              {p.difficulty && (
+                                <span
+                                  className={`diff-badge ${difficultyClass(p.difficulty)}`}
+                                >
+                                  {p.difficulty.toLowerCase()}
+                                </span>
+                              )}
+                              {meta && <span className="meta">{meta}</span>}
+                            </span>
+                          )}
                         </button>
                         {open && (
                           <div className="ledger-sessions">
@@ -881,7 +1005,6 @@ export default function App() {
               </button>
             </div>
           </div>
-          <p className="smudge">the tutor knows the solution. it will not be handing it over.</p>
         </aside>
       </div>
     </div>

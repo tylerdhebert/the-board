@@ -10,6 +10,7 @@ type Props = {
 
 // Monaco themed to the chalkboard: slate background, chalk text, colored-chalk tokens.
 const THEME = 'chalkboard'
+const GHOST_COLOR = 'rgba(58, 74, 65, 0.6)' // #3a4a41 at ~60%
 
 export default function CodeEditor({ value, onChange, language }: Props) {
   const monacoRef = useRef<Parameters<OnMount>[1] | null>(null)
@@ -18,6 +19,8 @@ export default function CodeEditor({ value, onChange, language }: Props) {
   const languageRef = useRef(language)
   languageRef.current = language
   const genRef = useRef(0)
+  const ghostRef = useRef<HTMLDivElement | null>(null)
+  const disposablesRef = useRef<{ dispose: () => void }[]>([])
 
   const ensureLsp = () => {
     const monaco = monacoRef.current
@@ -37,6 +40,58 @@ export default function CodeEditor({ value, onChange, language }: Props) {
       lspRef.current = session
       session.setActive(languageRef.current === 'csharp')
     })
+  }
+
+  const updateGhostMargin = () => {
+    const editor = editorRef.current
+    const monaco = monacoRef.current
+    const ghost = ghostRef.current
+    if (!editor || !monaco || !ghost) return
+
+    const { EditorOption } = monaco.editor
+    const lineHeight = editor.getOption(EditorOption.lineHeight)
+    const fontSize = editor.getOption(EditorOption.fontSize)
+    const fontFamily = editor.getOption(EditorOption.fontFamily)
+    const layout = editor.getLayoutInfo()
+    const lineCount = editor.getModel()?.getLineCount() ?? 1
+    const contentHeight = editor.getContentHeight()
+    const scrollTop = editor.getScrollTop()
+    const height = layout.height
+
+    // Space below the last real line (content height minus scroll = bottom of
+    // content in viewport coords). Ghosts fill from there to the container bottom.
+    const contentBottom = contentHeight - scrollTop
+    const remaining = height - contentBottom
+    if (remaining < lineHeight * 0.5) {
+      ghost.style.display = 'none'
+      ghost.textContent = ''
+      return
+    }
+
+    const ghostCount = Math.floor(remaining / lineHeight)
+    if (ghostCount <= 0) {
+      ghost.style.display = 'none'
+      ghost.textContent = ''
+      return
+    }
+
+    const numbers: string[] = []
+    for (let i = 1; i <= ghostCount; i++) {
+      numbers.push(String(lineCount + i))
+    }
+
+    ghost.style.display = 'block'
+    ghost.style.top = `${contentBottom}px`
+    ghost.style.left = '0'
+    ghost.style.width = `${layout.lineNumbersLeft + layout.lineNumbersWidth}px`
+    ghost.style.paddingLeft = `${layout.lineNumbersLeft}px`
+    ghost.style.boxSizing = 'border-box'
+    ghost.style.lineHeight = `${lineHeight}px`
+    ghost.style.fontSize = `${fontSize}px`
+    ghost.style.fontFamily = fontFamily
+    ghost.style.color = GHOST_COLOR
+    ghost.style.textAlign = 'right'
+    ghost.textContent = numbers.join('\n')
   }
 
   const onMount: OnMount = (editor, monaco) => {
@@ -67,6 +122,40 @@ export default function CodeEditor({ value, onChange, language }: Props) {
     monaco.editor.setTheme(THEME)
     editorRef.current = editor
     monacoRef.current = monaco
+
+    // Ghost margin: numbers continuing past the buffer like ruled slate.
+    const dom = editor.getDomNode()
+    if (dom) {
+      const host = dom.parentElement
+      if (host) {
+        if (getComputedStyle(host).position === 'static') {
+          host.style.position = 'relative'
+        }
+        const ghost = document.createElement('div')
+        ghost.className = 'ghost-linenums'
+        ghost.setAttribute('aria-hidden', 'true')
+        Object.assign(ghost.style, {
+          position: 'absolute',
+          pointerEvents: 'none',
+          overflow: 'hidden',
+          whiteSpace: 'pre',
+          zIndex: '1',
+          userSelect: 'none',
+          display: 'none',
+        })
+        host.appendChild(ghost)
+        ghostRef.current = ghost
+      }
+    }
+
+    disposablesRef.current = [
+      editor.onDidContentSizeChange(() => updateGhostMargin()),
+      editor.onDidLayoutChange(() => updateGhostMargin()),
+      editor.onDidScrollChange(() => updateGhostMargin()),
+      editor.onDidChangeModelContent(() => updateGhostMargin()),
+    ]
+    requestAnimationFrame(() => updateGhostMargin())
+
     ensureLsp()
   }
 
@@ -75,10 +164,18 @@ export default function CodeEditor({ value, onChange, language }: Props) {
   }, [language])
 
   useEffect(() => {
+    requestAnimationFrame(() => updateGhostMargin())
+  }, [value])
+
+  useEffect(() => {
     return () => {
       genRef.current += 1
       lspRef.current?.dispose()
       lspRef.current = null
+      for (const d of disposablesRef.current) d.dispose()
+      disposablesRef.current = []
+      ghostRef.current?.remove()
+      ghostRef.current = null
     }
   }, [])
 

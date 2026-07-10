@@ -34,11 +34,13 @@ export function studentSafeProblem(card: ProblemCard): {
   title: string;
   statement: string;
   constraints: string;
+  difficulty?: string;
 } {
   return {
     title: card.title,
     statement: card.statement,
     constraints: card.constraints,
+    ...(card.difficulty ? { difficulty: card.difficulty } : {}),
   };
 }
 
@@ -108,6 +110,7 @@ export async function getOrIngestCard(
   const model = opts?.model ?? 'gpt-5.5';
   const client = opts?.client ?? createClient('codex');
   const { card, verification } = await ingest(client, problem.statement, model);
+  card.difficulty = problem.difficulty;
   await writeFile(cachePath, JSON.stringify(card, null, 2) + '\n', 'utf8');
   await writeFile(snippetsPath, JSON.stringify(problem.codeSnippets, null, 2) + '\n', 'utf8');
   return { card, verified: verification.ok, cached: false, snippets: problem.codeSnippets };
@@ -130,14 +133,18 @@ export async function loadCard(name: string): Promise<ProblemCard> {
   }
 }
 
-export async function listCards(): Promise<{ name: string; title: string }[]> {
+export async function listCards(): Promise<{ name: string; title: string; difficulty?: string }[]> {
   const entries = await readdir(cardsDir);
-  const cards: { name: string; title: string }[] = [];
+  const cards: { name: string; title: string; difficulty?: string }[] = [];
   for (const entry of entries) {
     if (!entry.endsWith('.card.json')) continue;
     const name = entry.slice(0, -'.card.json'.length);
     const card = await loadCard(name);
-    cards.push({ name, title: card.title });
+    cards.push({
+      name,
+      title: card.title,
+      ...(card.difficulty ? { difficulty: card.difficulty } : {}),
+    });
   }
   return cards;
 }

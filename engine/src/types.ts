@@ -6,6 +6,7 @@ export interface ProblemCard {
   title: string;
   statement: string;
   constraints: string;
+  difficulty?: string;
   brute_force: BruteForce;
   optimal: Optimal;
   key_insight: string;

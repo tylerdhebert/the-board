@@ -66,5 +66,6 @@
       "input": "longest_common_prefix([\"\", \"abc\"])",
       "output": "\"\""
     }
-  ]
+  ],
+  "difficulty": "Easy"
 }

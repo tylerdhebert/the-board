@@ -233,6 +233,7 @@ async function handle(
     type ProblemRow = {
       name: string;
       title: string;
+      difficulty?: string;
       status: 'new' | 'attempted' | 'solved';
       sessions: {
         id: string;
@@ -256,6 +257,7 @@ async function handle(
       rows.push({
         name: card.name,
         title: card.title,
+        ...(card.difficulty ? { difficulty: card.difficulty } : {}),
         status,
         sessions: sess.map((s) => ({
           id: s.id,
@@ -280,7 +282,13 @@ async function handle(
     sendJson(
       res,
       200,
-      rows.map(({ name, title, status, sessions: sess }) => ({ name, title, status, sessions: sess })),
+      rows.map(({ name, title, difficulty, status, sessions: sess }) => ({
+        name,
+        title,
+        ...(difficulty ? { difficulty } : {}),
+        status,
+        sessions: sess,
+      })),
     );
     return;
   }
