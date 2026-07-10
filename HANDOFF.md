@@ -148,7 +148,27 @@ restart 8787 to pick it up (tsx isn't in watch mode). Web changes hot-reload.
    implementing subagent used the REAL store paths as test fixtures and its
    own cleanup sweep killed it mid-run (and the running desktop api) — test
    fixtures must use isolated paths, and broad process kills are banned.
-8. **API-client backends** — see item 5 above (unchanged, waiting on keys).
+8. ~~**Polish pack**~~ SHIPPED 2026-07-09 (`7d2c0d2`): ledger hides/prunes
+   empty sessions + first-message snippets; honest void-return run errors;
+   JsonlTracer wired (every session → `logs/<id>.jsonl`); window state
+   remembered; C# LSP dormant-not-dead across language switches (0.8s
+   switch-back). `TUTOR_DB_PATH` env for isolated fixtures.
+9. ~~**Provider settings**~~ SHIPPED 2026-07-09 (`cabae01`): strip `providers`
+   button → chalk modal, per-role backend/model (teacher/gate/unlock/ingest),
+   persisted in tutor.db `settings`, applied at construction/rehydration +
+   ingest. Includes the fence fix: claude wraps JSON in ```-fences;
+   completeJson unwraps (verified with a real claude/sonnet-gated turn that
+   REVISEd).
+10. ~~**Takes**~~ SHIPPED 2026-07-09 (`b254195`, spec `.agent-tasks/takes.md`):
+   every run snapshots {code, lang, results} (takes table); chips with pass
+   counts under the editor; chip click = FULL CHECKOUT with auto-snapshot of
+   dirty work as a –/n take (user's design); dirty `*` on the run button.
+   Plus: editor now flexes to fill the window (was fixed 320px + dead band).
+11. **API-client backends** — see item 5 above (unchanged, waiting on keys).
+   Also queued ideas: mutation-problem support for run-my-code (infer check
+   mode at ingest by observing the reference solution — return vs mutated
+   arg), UI touch-up round (user wants to discuss), README refresh (stale
+   since streaming).
 
 ## Recently shipped
 - **2026-07-09 (streaming session):** SSE stage streaming + typewriter reveal
