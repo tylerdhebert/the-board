@@ -1,5 +1,5 @@
-/* ============================================================
-   THE BOARD — a teacher's slate for a Socratic coding tutor.
+﻿/* ============================================================
+   THE BOARD â€” a teacher's slate for a Socratic coding tutor.
    Signature: hand-drawn CHALK outlines (no rounded rectangles),
    the tutor speaks in colored chalk in the margin.
    ============================================================ */
@@ -96,7 +96,7 @@ body::before {
   gap: 10px;
   font-family: var(--display);
   white-space: nowrap;
-  /* it's a button now (way home to the ledger) — keep it looking like chalk */
+  /* it's a button now (way home to the ledger) â€” keep it looking like chalk */
   background: transparent;
   border: 0;
   padding: 0;
@@ -314,6 +314,7 @@ body::before {
 
 /* ---- desk (problem + work) ---- */
 .desk {
+  position: relative;
   display: flex;
   flex-direction: column;
   padding: 34px 40px;
@@ -379,7 +380,7 @@ body::before {
 }
 .hero.compressed p { font-size: 15px; margin-bottom: 6px; }
 
-/* the ledger — browsable problem roster */
+/* the ledger â€” browsable problem roster */
 .ledger {
   margin-top: 28px;
   max-width: 560px;
@@ -519,6 +520,44 @@ body::before {
 }
 @media (prefers-reduced-motion: reduce) { .spin-ring { animation: none; } }
 
+/* ---- board doodles: leftover chalk on the hero's empty side ---- */
+.doodles {
+  position: absolute;
+  top: 8%;
+  right: 3%;
+  width: 40%;
+  height: 84%;
+  pointer-events: none;
+  user-select: none;
+  z-index: 0;
+  font-family: var(--mono);
+  color: var(--chalk-faint);
+}
+.doodle {
+  position: absolute;
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.6;
+  opacity: 0.55;
+  white-space: pre;
+}
+.doodle.d1 { top: 4%; left: 12%; transform: rotate(-3deg); }
+.doodle.d2 { top: 18%; left: 34%; transform: rotate(1.5deg); font-size: 12px; }
+.doodle.d3 { top: 40%; left: 8%; transform: rotate(-6deg); }
+.doodle.circled {
+  padding: 10px 18px;
+  border: 1.5px solid var(--chalk-faint);
+  border-radius: 50%;
+  filter: url(#chalk-rough);
+}
+.doodle.d4 { top: 52%; left: 42%; transform: rotate(2deg); font-size: 12px; opacity: 0.45; }
+.doodle.d5 { top: 76%; left: 10%; transform: rotate(-1.5deg); }
+.doodle.d6 { top: 88%; left: 30%; transform: rotate(1deg); opacity: 0.4; }
+.doodle.d7 { top: 30%; left: 60%; transform: rotate(-4deg); opacity: 0.5; font-style: italic; }
+.doodle.d8 { top: 64%; left: 6%; transform: rotate(0.5deg); opacity: 0.45; }
+@media (max-width: 1250px) { .doodles { display: none; } }
+
 /* problem view */
 .problem { max-width: 720px; flex: 0 0 auto; }
 .problem .eyebrow {
@@ -546,24 +585,32 @@ body::before {
   position: relative;
 }
 .diff-badge {
+  position: relative;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 11.5px;
   letter-spacing: 0.1em;
   text-transform: lowercase;
   background: transparent;
-  border: 1px solid currentColor;
-  padding: 2px 8px;
-  filter: url(#chalk-rough);
+  padding: 3px 10px;
   transform: rotate(-1.5deg);
   flex: 0 0 auto;
+}
+/* chalk texture on the OUTLINE only — the label stays crisp and readable */
+.diff-badge::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1.5px solid currentColor;
+  filter: url(#chalk-rough);
+  pointer-events: none;
   line-height: 1.3;
 }
 .diff-badge.easy { color: var(--sky); }
 .diff-badge.medium { color: var(--amber); }
 .diff-badge.hard { color: var(--coral); }
 .ledger-row .diff-badge {
-  font-size: 10px;
-  padding: 1px 6px;
+  font-size: 10.5px;
+  padding: 2px 8px;
   transform: rotate(-1.2deg);
 }
 .solved-stamp {
@@ -651,6 +698,16 @@ body::before {
 .runbtn:hover:not(:disabled) .run-tri path { stroke: #ffd76a; }
 .runbtn:disabled { color: var(--chalk-faint); cursor: default; }
 .runbtn:disabled .run-tri path { stroke: var(--amber); opacity: 0.7; }
+.dirtyflag {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: lowercase;
+  color: var(--amber);
+  opacity: 0.85;
+  flex: 0 0 auto;
+  cursor: default;
+}
 .resetbtn {
   background: transparent;
   border: 0;
@@ -680,16 +737,17 @@ body::before {
   min-width: 0;
 }
 .attempts-rail {
-  flex: 0 0 200px;
-  width: 200px;
+  flex: 0 0 220px;
+  width: 220px;
   display: flex;
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.55;
-  border-left: 1px solid var(--chalk-line);
+  border-left: 1.5px solid var(--chalk-line);
+  background: rgba(0, 0, 0, 0.14);
   margin-left: 8px;
   transition: flex-basis 0.15s ease, width 0.15s ease;
 }
@@ -750,8 +808,9 @@ body::before {
   width: 100%;
   background: transparent;
   border: 0;
+  border-left: 2px solid transparent;
   border-bottom: 1px solid transparent;
-  color: var(--chalk-faint);
+  color: var(--chalk-dim);
   font-family: var(--mono);
   font-size: 11px;
   letter-spacing: 0.04em;
@@ -763,15 +822,17 @@ body::before {
 }
 .attempt-row .attempt-label { flex: 1 1 auto; min-width: 0; }
 .attempt-row .attempt-score { flex: 0 0 auto; }
+.attempt-row:hover { background: rgba(236, 230, 214, 0.05); color: var(--chalk); }
 .attempt-row.allpass { color: var(--sky); }
 .attempt-row.somefail { color: var(--coral); }
 .attempt-row.unrun { color: var(--chalk-faint); }
 .attempt-row.selected {
   color: var(--chalk);
-  border-bottom-color: var(--chalk);
+  border-left-color: var(--amber);
+  background: rgba(236, 230, 214, 0.06);
 }
-.attempt-row.allpass.selected { color: var(--sky); border-bottom-color: var(--sky); }
-.attempt-row.somefail.selected { color: var(--coral); border-bottom-color: var(--coral); }
+.attempt-row.allpass.selected { color: var(--sky); }
+.attempt-row.somefail.selected { color: var(--coral); }
 .takes-cases {
   margin-top: 10px;
   flex: 0 0 auto;

@@ -700,6 +700,11 @@ export default function App() {
                 <div className="worklabel">
                   <span>your work</span>
                   <div className="workactions">
+                    {dirty && (
+                      <span className="dirtyflag" title="changes since your last attempt — running or switching attempts snapshots them">
+                        ● unsaved
+                      </span>
+                    )}
                     {sessionId && code.trim() && (
                       <button
                         type="button"
@@ -724,7 +729,7 @@ export default function App() {
                             filter="url(#chalk-rough)"
                           />
                         </svg>
-                        <span>{running ? 'running…' : dirty ? 'run *' : 'run'}</span>
+                        <span>{running ? 'running…' : 'run'}</span>
                       </button>
                     )}
                     <select className="langpick" value={lang} onChange={(e) => changeLang(e.target.value)}>
@@ -848,7 +853,19 @@ export default function App() {
               </section>
             </>
           ) : (
-            <div className={`hero${problems.length > 0 ? ' compressed' : ''}`}>
+            <>
+              {/* leftover chalk on the empty side of the board — pure decoration */}
+              <div className="doodles" aria-hidden="true">
+                <pre className="doodle d1">console.log("hello, world!")</pre>
+                <pre className="doodle d2">{'def fib(n):\n    return n if n < 2 else\n        fib(n-1) + fib(n-2)'}</pre>
+                <span className="doodle d3 circled">O(n log n)</span>
+                <pre className="doodle d4">{'      (8)\n     /   \\\n   (3)    (10)\n   / \\      \\\n (1) (6)    (14)'}</pre>
+                <pre className="doodle d5">{'while (left < right) …'}</pre>
+                <pre className="doodle d6">{'int[] nums = { 2, 7, 11, 15 };'}</pre>
+                <span className="doodle d7">// TODO: think first</span>
+                <span className="doodle d8">{'target − nums[i] ∈ seen ?'}</span>
+              </div>
+              <div className={`hero${problems.length > 0 ? ' compressed' : ''}`}>
               <p className="kicker">socratic coding tutor</p>
               <h1>
                 I won't tell you<br />
@@ -930,7 +947,8 @@ export default function App() {
                   })}
                 </div>
               )}
-            </div>
+              </div>
+            </>
           )}
         </main>
 
