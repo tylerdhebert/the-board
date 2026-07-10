@@ -950,10 +950,12 @@ export default function App() {
                   )}
                   {solved && <span className="solved-stamp">solved ✓</span>}
                 </div>
-                <h2>statement</h2>
-                <p className="statement">{problem.statement}</p>
-                <h2>constraints</h2>
-                <p className="constraints">{problem.constraints}</p>
+                <div className="problem-body">
+                  <h2>statement</h2>
+                  <p className="statement">{problem.statement}</p>
+                  <h2>constraints</h2>
+                  <p className="constraints">{problem.constraints}</p>
+                </div>
                 {showVocab && vocab && (
                   <aside className="vocab" aria-label="the vocabulary">
                     <p className="eyebrow">the vocabulary</p>

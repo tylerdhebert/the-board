@@ -670,14 +670,11 @@ body::before {
 .problem.has-vocab > .problem-title-row {
   grid-column: 1 / -1;
 }
-.problem.has-vocab > h2,
-.problem.has-vocab > .statement,
-.problem.has-vocab > .constraints {
+.problem.has-vocab > .problem-body {
   grid-column: 1;
 }
 .problem.has-vocab > .vocab {
   grid-column: 2;
-  grid-row: 3 / -1;
   align-self: start;
 }
 .vocab .eyebrow {
