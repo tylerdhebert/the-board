@@ -164,11 +164,53 @@ restart 8787 to pick it up (tsx isn't in watch mode). Web changes hot-reload.
    counts under the editor; chip click = FULL CHECKOUT with auto-snapshot of
    dirty work as a –/n take (user's design); dirty `*` on the run button.
    Plus: editor now flexes to fill the window (was fixed 320px + dead band).
-11. **API-client backends** — see item 5 above (unchanged, waiting on keys).
-   Also queued ideas: mutation-problem support for run-my-code (infer check
-   mode at ingest by observing the reference solution — return vs mutated
-   arg), UI touch-up round (user wants to discuss), README refresh (stale
-   since streaming).
+11. **THE PLAN (agreed 2026-07-10 morning, user's priorities — next sessions
+   work top-down):**
+   - **Round A (first, tonight-sized):**
+     (a) BUG: run that times out (infinite loop) leaves a sticky "running…"
+     state after the error — repro live, likely error-path response-shape
+     mismatch from the takes change. Fix before anything.
+     (b) review-my-work + commentary: composer text rides along as
+     "my notes:" on the review turn (user already does this manually).
+     (c) chat ergonomics: resizable margin (drag divider, width in
+     localStorage), textarea auto-grows a FEW lines max (~5-6 rows cap) with
+     a DRAG HANDLE ON ITS TOP EDGE to pull up manually; styling pass —
+     soft shadow on student notes, faint glow on tutor notes, chalk
+     treatment for the textarea.
+   - **Round B (tutor sees the board, pull not push):** do NOT send the
+     buffer every turn. Server materializes the buffer to a per-session
+     scratch file each turn; the teacher prompt gets ONE lightweight line
+     (attempt N · x/y passing · language · last failing case) plus "the
+     student's editor is at ./editor.<ext> — read it if you need it".
+     codex exec / claude -p can read files themselves — the CLI's own
+     agency IS the fetch tool. Teacher cwd = that scratch dir. Also:
+     pseudocode/idioms must follow the student's current language.
+   - **Python LSP:** spec `.agent-tasks/python-lsp.md` (pyright over the
+     generalized /lsp/:lang bridge; picker already promises python).
+   - **Round C (stress cases — LLM proposes, code verifies):** engine call
+     proposes adversarial INPUTS only (bounds/empty/dupes/negatives/
+     overflow bait, same call-expression format); expected outputs come
+     from EXECUTING the verified reference (sandbox + timeouts); rigorous
+     upgrade = differential testing: model also writes a brute-force impl
+     (verified on base examples), stress inputs must AGREE between brute
+     and optimal or they're dropped. Persist `stress: [{input, output}]`
+     on the card; "chalk up tougher cases" button; runner runs examples +
+     stress together (attempt chips count both).
+   - **Round D (the fun — DISCUSS with user before building):**
+     (1) concept board: locked leak-terms rendered as chalk smears/erased
+     words in the dead zone right of the statement; earning a term writes
+     it back in (unlockedThisTurn already flows). No info leak beyond count.
+     (2) tutor points at code: optional `POINT: <line>` control line in the
+     teacher protocol (stripped like MODE, gate-checked) → chalk
+     arrow/underline Monaco decoration + margin note anchored like a speech
+     bubble. (3) interactive scaffold blanks: scaffold mode is PROMPTED
+     (teacher_tmpl MODE: scaffold) — emit stable `____` blanks, render as
+     inline chalk inputs, "send back" composes the filled version.
+   - **Maybe:** provider-check button (live one-line completion probe per
+     role, ✓/✗ + latency — ground truth, no LLM model knowledge; the
+     models-suggestion list was CUT by the user: no LLM-known slug lists).
+   - **Backlog:** API-client backends (waiting on keys), mutation-problem
+     run support (infer check mode at ingest), README refresh (very stale).
 
 ## Recently shipped
 - **2026-07-09 (streaming session):** SSE stage streaming + typewriter reveal
