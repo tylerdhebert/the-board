@@ -193,15 +193,22 @@ restart 8787 to pick it up (tsx isn't in watch mode). Web changes hot-reload.
      pseudocode/idioms must follow the student's current language.
    - **Python LSP:** spec `.agent-tasks/python-lsp.md` (pyright over the
      generalized /lsp/:lang bridge; picker already promises python).
-   - **Round C (stress cases — LLM proposes, code verifies):** engine call
-     proposes adversarial INPUTS only (bounds/empty/dupes/negatives/
-     overflow bait, same call-expression format); expected outputs come
-     from EXECUTING the verified reference (sandbox + timeouts); rigorous
-     upgrade = differential testing: model also writes a brute-force impl
-     (verified on base examples), stress inputs must AGREE between brute
-     and optimal or they're dropped. Persist `stress: [{input, output}]`
-     on the card; "chalk up tougher cases" button; runner runs examples +
-     stress together (attempt chips count both).
+   - **Round C (stress cases — REVISED 07-10 after user's oracle-trust
+     concern; principle: wrong cases must be HARMLESS and CHEAP TO KILL,
+     not impossible):** LLM proposes adversarial INPUTS only; expected
+     outputs come from EXECUTING the reference (sandbox + timeouts);
+     differential testing with CROSS-PROVIDER decorrelation (brute-force
+     impl written by the OTHER configured backend, verified on base
+     examples; stress inputs must agree between brute and optimal or drop);
+     generated input-constraint validator (failure direction = drop).
+     HARD RULES: (1) stress NEVER gates solved — SOLVED = official examples
+     only; stress shown separately (`examples 3/3 · stress 4/6`), rows
+     visually distinct; (2) every stress row has a one-click ✕ = "this case
+     is wrong, remove from card permanently" — the user is the court of
+     appeal; (3) multiple-valid-answer problems (statement says "any", or
+     brute/optimal disagree repeatedly) → generation REFUSES with an honest
+     message; dropped > wrong, always. Persist `stress: [{input, output}]`
+     on the card; "chalk up tougher cases" button (~40s once, cached).
    - **Round D (the fun — DISCUSS with user before building):**
      (1) concept board: locked leak-terms rendered as chalk smears/erased
      words in the dead zone right of the statement; earning a term writes
