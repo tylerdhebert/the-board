@@ -20,6 +20,14 @@ export type PersistedNote = {
   redrafted?: boolean;
 };
 
+export type PersistedTake = {
+  seq: number;
+  ts: string;
+  lang: string;
+  code: string;
+  results: StudentRunResult | null;
+};
+
 export type PersistedSession = {
   id: string;
   cardName: string;
@@ -30,6 +38,7 @@ export type PersistedSession = {
   lang: string;
   code: string;
   notes: PersistedNote[];
+  takes: PersistedTake[];
   lastRun: StudentRunResult | null;
   engine: { transcript: Message[]; lockedTerms: string[]; turnCounter: number };
 };
@@ -59,9 +68,22 @@ type NoteRow = {
   redrafted: number | null;
 };
 
+type TakeRow = {
+  session_id: string;
+  seq: number;
+  ts: string;
+  lang: string;
+  code: string;
+  results: string | null;
+};
+
 let db: DatabaseSync | null = null;
 
-function rowToSession(row: SessionRow, notes: PersistedNote[]): PersistedSession {
+function rowToSession(
+  row: SessionRow,
+  notes: PersistedNote[],
+  takes: PersistedTake[],
+): PersistedSession {
   return {
     id: row.id,
     cardName: row.card_name,
@@ -72,6 +94,7 @@ function rowToSession(row: SessionRow, notes: PersistedNote[]): PersistedSession
     lang: row.lang,
     code: row.code,
     notes,
+    takes,
     lastRun: row.last_run ? (JSON.parse(row.last_run) as StudentRunResult) : null,
     engine: {
       transcript: JSON.parse(row.engine_transcript) as Message[],
@@ -97,6 +120,23 @@ function loadNotes(database: DatabaseSync, sessionId: string): PersistedNote[] {
     .prepare('SELECT * FROM notes WHERE session_id = ? ORDER BY seq ASC')
     .all(sessionId) as NoteRow[];
   return rows.map(noteFromRow);
+}
+
+function takeFromRow(row: TakeRow): PersistedTake {
+  return {
+    seq: row.seq,
+    ts: row.ts,
+    lang: row.lang,
+    code: row.code,
+    results: row.results ? (JSON.parse(row.results) as StudentRunResult) : null,
+  };
+}
+
+function loadTakes(database: DatabaseSync, sessionId: string): PersistedTake[] {
+  const rows = database
+    .prepare('SELECT * FROM takes WHERE session_id = ? ORDER BY seq ASC')
+    .all(sessionId) as TakeRow[];
+  return rows.map(takeFromRow);
 }
 
 function migrateFromJsonFiles(database: DatabaseSync): void {
@@ -203,6 +243,15 @@ function getDb(): DatabaseSync {
       redrafted INTEGER,
       PRIMARY KEY (session_id, seq)
     );
+    CREATE TABLE IF NOT EXISTS takes (
+      session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+      seq INTEGER NOT NULL,
+      ts TEXT NOT NULL,
+      lang TEXT NOT NULL,
+      code TEXT NOT NULL,
+      results TEXT,
+      PRIMARY KEY (session_id, seq)
+    );
     CREATE INDEX IF NOT EXISTS idx_sessions_card ON sessions(card_name);
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,
@@ -291,6 +340,22 @@ export async function saveSession(s: PersistedSession): Promise<void> {
         n.redrafted == null ? null : n.redrafted ? 1 : 0,
       );
     }
+
+    database.prepare('DELETE FROM takes WHERE session_id = ?').run(s.id);
+    const insertTake = database.prepare(`
+      INSERT INTO takes (session_id, seq, ts, lang, code, results)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    for (const t of s.takes) {
+      insertTake.run(
+        s.id,
+        t.seq,
+        t.ts,
+        t.lang,
+        t.code,
+        t.results == null ? null : JSON.stringify(t.results),
+      );
+    }
     database.exec('COMMIT');
   } catch (err) {
     database.exec('ROLLBACK');
@@ -305,13 +370,15 @@ export async function loadSession(id: string): Promise<PersistedSession | null> 
     | SessionRow
     | undefined;
   if (!row) return null;
-  return rowToSession(row, loadNotes(database, id));
+  return rowToSession(row, loadNotes(database, id), loadTakes(database, id));
 }
 
 export async function listSessions(): Promise<PersistedSession[]> {
   const database = getDb();
   const rows = database.prepare('SELECT * FROM sessions').all() as SessionRow[];
-  return rows.map((row) => rowToSession(row, loadNotes(database, row.id)));
+  return rows.map((row) =>
+    rowToSession(row, loadNotes(database, row.id), loadTakes(database, row.id)),
+  );
 }
 
 export function deleteSessions(ids: string[]): void {
@@ -328,7 +395,9 @@ export function deleteSessions(ids: string[]): void {
   }
 }
 
-/** Empty = never started: no turns, unsolved, blank code. */
+/** Empty = never started: no turns, unsolved, blank code, no takes. */
 export function isEmptySession(s: PersistedSession): boolean {
-  return s.engine.turnCounter === 0 && !s.solved && s.code === '';
+  return (
+    s.engine.turnCounter === 0 && !s.solved && s.code === '' && s.takes.length === 0
+  );
 }

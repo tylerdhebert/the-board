@@ -84,7 +84,7 @@ export default function CodeEditor({ value, onChange, language }: Props) {
 
   return (
     <Editor
-      height="320px"
+      height="100%"
       language={language}
       theme={THEME}
       value={value}
@@ -104,6 +104,7 @@ export default function CodeEditor({ value, onChange, language }: Props) {
         guides: { indentation: false },
         scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8 },
         tabSize: 2,
+        automaticLayout: true,
       }}
     />
   )

@@ -314,6 +314,8 @@ body::before {
 
 /* ---- desk (problem + work) ---- */
 .desk {
+  display: flex;
+  flex-direction: column;
   padding: 34px 40px;
   overflow-y: auto;
   border-right: 1.5px solid var(--chalk-line);
@@ -512,7 +514,7 @@ body::before {
 @media (prefers-reduced-motion: reduce) { .spin-ring { animation: none; } }
 
 /* problem view */
-.problem { max-width: 720px; }
+.problem { max-width: 720px; flex: 0 0 auto; }
 .problem .eyebrow {
   font-family: var(--mono);
   font-size: 11px;
@@ -554,7 +556,13 @@ body::before {
 }
 
 /* code editor slot */
-.workarea { margin-top: 30px; }
+.workarea {
+  margin-top: 30px;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
 .workarea .worklabel {
   display: flex;
   justify-content: space-between;
@@ -565,6 +573,7 @@ body::before {
   text-transform: uppercase;
   color: var(--chalk-faint);
   margin: 0 0 10px;
+  flex: 0 0 auto;
 }
 .workactions {
   display: flex;
@@ -588,22 +597,78 @@ body::before {
 }
 .runbtn:hover:not(:disabled) { color: var(--chalk); border-bottom-color: var(--sky); }
 .runbtn:disabled { color: var(--chalk-faint); cursor: default; }
-.runresults {
+.takes-rail {
   margin-top: 10px;
+  flex: 0 0 auto;
+  max-height: 180px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   font-family: var(--mono);
   font-size: 12px;
   line-height: 1.55;
 }
-.runresults .pass { color: var(--chalk-dim); }
-.runresults .pass .mark { color: var(--sky); margin-right: 8px; }
-.runresults .fail { color: var(--coral); }
-.runresults .fail .mark { margin-right: 8px; }
-.runresults .disp { letter-spacing: 0; }
-.runresults .detail { opacity: 0.9; }
-.editor-shell { position: relative; padding: 7px; }
-.editor-shell .monaco-host { height: 320px; }
+.takes-chips {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  flex: 0 0 auto;
+}
+.take-chip {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  color: var(--chalk-faint);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: lowercase;
+  padding: 2px 2px;
+  cursor: pointer;
+  outline: none;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+.take-chip.allpass { color: var(--sky); }
+.take-chip.somefail { color: var(--coral); }
+.take-chip.unrun { color: var(--chalk-faint); }
+.take-chip.selected {
+  color: var(--chalk);
+  border-bottom-color: var(--chalk);
+}
+.take-chip.allpass.selected { color: var(--sky); border-bottom-color: var(--sky); }
+.take-chip.somefail.selected { color: var(--coral); border-bottom-color: var(--coral); }
+.takes-cases {
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+.takes-cases .pass { color: var(--chalk-dim); }
+.takes-cases .pass .mark { color: var(--sky); margin-right: 8px; }
+.takes-cases .fail { color: var(--coral); }
+.takes-cases .fail .mark { margin-right: 8px; }
+.takes-cases .disp { letter-spacing: 0; }
+.takes-cases .detail { opacity: 0.9; }
+.takes-cases .unrun-note { color: var(--chalk-faint); }
+.editor-shell {
+  position: relative;
+  padding: 7px;
+  flex: 1 1 auto;
+  min-height: 334px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.editor-shell .monaco-host {
+  height: 100%;
+  min-height: 320px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
 .editor-loading {
-  height: 320px; display: flex; align-items: center; justify-content: center;
+  height: 100%; min-height: 320px; display: flex; align-items: center; justify-content: center;
   font-family: var(--mono); font-size: 12px; color: var(--chalk-faint);
   background: var(--slate-deep);
 }

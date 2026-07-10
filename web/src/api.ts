@@ -37,6 +37,24 @@ export interface PersistedNote {
   redrafted?: boolean
 }
 
+export type RunCaseResult = {
+  display: string
+  expected: string
+  got: string
+  pass: boolean
+  error?: string
+}
+
+export type StudentRunResult = { cases: RunCaseResult[]; error?: string }
+
+export type PersistedTake = {
+  seq: number
+  ts: string
+  lang: string
+  code: string
+  results: StudentRunResult | null
+}
+
 export interface ResumePayload {
   sessionId: string
   cardName: string
@@ -44,7 +62,7 @@ export interface ResumePayload {
   notes: PersistedNote[]
   code: string
   lang: string
-  lastRun: StudentRunResult | null
+  takes: PersistedTake[]
   solved: boolean
 }
 
@@ -159,24 +177,29 @@ export async function startSession(
   )
 }
 
-export type RunCaseResult = {
-  display: string
-  expected: string
-  got: string
-  pass: boolean
-  error?: string
-}
-
-export type StudentRunResult = { cases: RunCaseResult[]; error?: string }
-
 export async function runExamples(
   sessionId: string,
   code: string,
   language: string,
-): Promise<StudentRunResult> {
-  return request<StudentRunResult>(`/api/session/${sessionId}/run`, {
+  dirty?: { code: string; lang: string },
+): Promise<{ result: StudentRunResult; takes: PersistedTake[] }> {
+  return request<{ result: StudentRunResult; takes: PersistedTake[] }>(
+    `/api/session/${sessionId}/run`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ code, language, ...(dirty ? { dirty } : {}) }),
+    },
+  )
+}
+
+export async function addTake(
+  sessionId: string,
+  code: string,
+  lang: string,
+): Promise<{ takes: PersistedTake[] }> {
+  return request<{ takes: PersistedTake[] }>(`/api/session/${sessionId}/take`, {
     method: 'POST',
-    body: JSON.stringify({ code, language }),
+    body: JSON.stringify({ code, lang }),
   })
 }
 

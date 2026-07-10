@@ -18,6 +18,7 @@ import {
   toSlug,
   type CaseSpec,
   type ProblemCard,
+  type StudentRunResult,
 } from './engine.js';
 import { attachLspBridge, lspInfo } from './lsp.js';
 import {
@@ -27,14 +28,38 @@ import {
   loadSession,
   saveSession,
   type PersistedSession,
+  type PersistedTake,
 } from './sessionStore.js';
 import { loadSettings, saveSettings, type AppSettings } from './settings.js';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '../..');
-const logsDir = path.join(repoRoot, 'logs');
+const logsDir = process.env.TUTOR_LOGS_DIR
+  ? path.resolve(process.env.TUTOR_LOGS_DIR)
+  : path.join(repoRoot, 'logs');
 mkdirSync(logsDir, { recursive: true });
+
+function nextTakeSeq(takes: PersistedTake[]): number {
+  const last = takes[takes.length - 1];
+  return last ? last.seq + 1 : 1;
+}
+
+function appendTake(
+  takes: PersistedTake[],
+  partial: { lang: string; code: string; results: StudentRunResult | null },
+): PersistedTake[] {
+  return [
+    ...takes,
+    {
+      seq: nextTakeSeq(takes),
+      ts: new Date().toISOString(),
+      lang: partial.lang,
+      code: partial.code,
+      results: partial.results,
+    },
+  ];
+}
 
 function sessionTracer(sessionId: string): JsonlTracer {
   return new JsonlTracer(path.join(logsDir, `${sessionId}.jsonl`));
@@ -128,6 +153,7 @@ async function newEntry(card: ProblemCard, cardName: string): Promise<SessionEnt
     lang: '',
     code: '',
     notes: [],
+    takes: [],
     lastRun: null,
     engine: {
       transcript: [...session.transcript],
@@ -378,9 +404,37 @@ async function handle(
       notes: entry.persisted.notes,
       code: entry.persisted.code,
       lang: entry.persisted.lang,
-      lastRun: entry.persisted.lastRun,
+      takes: entry.persisted.takes,
       solved: entry.persisted.solved,
     });
+    return;
+  }
+
+  const takeMatch = pathname.match(/^\/api\/session\/([^/]+)\/take$/);
+  if (method === 'POST' && takeMatch) {
+    const sessionId = takeMatch[1]!;
+    const entry = await getOrRestore(sessionId);
+    if (!entry) {
+      sendJson(res, 404, { error: 'session not found' });
+      return;
+    }
+    const body = (await readJsonBody(req)) as { code?: string; lang?: string };
+    if (typeof body.code !== 'string' || typeof body.lang !== 'string') {
+      sendJson(res, 400, { error: 'code and lang are required' });
+      return;
+    }
+    const newest = entry.persisted.takes[entry.persisted.takes.length - 1];
+    if (newest && newest.code === body.code && newest.lang === body.lang) {
+      sendJson(res, 200, { takes: entry.persisted.takes });
+      return;
+    }
+    entry.persisted.takes = appendTake(entry.persisted.takes, {
+      code: body.code,
+      lang: body.lang,
+      results: null,
+    });
+    await persistEntry(entry);
+    sendJson(res, 200, { takes: entry.persisted.takes });
     return;
   }
 
@@ -392,7 +446,11 @@ async function handle(
       sendJson(res, 404, { error: 'session not found' });
       return;
     }
-    const body = (await readJsonBody(req)) as { code?: string; language?: string };
+    const body = (await readJsonBody(req)) as {
+      code?: string;
+      language?: string;
+      dirty?: { code: string; lang: string };
+    };
     const code = body.code;
     const language = body.language;
     if (typeof code !== 'string' || !code) {
@@ -404,6 +462,20 @@ async function handle(
       return;
     }
     try {
+      if (body.dirty && typeof body.dirty.code === 'string' && typeof body.dirty.lang === 'string') {
+        const newest = entry.persisted.takes[entry.persisted.takes.length - 1];
+        if (
+          !newest ||
+          newest.code !== body.dirty.code ||
+          newest.lang !== body.dirty.lang
+        ) {
+          entry.persisted.takes = appendTake(entry.persisted.takes, {
+            code: body.dirty.code,
+            lang: body.dirty.lang,
+            results: null,
+          });
+        }
+      }
       if (!entry.cases) {
         entry.cases = await extractCases(entry.card.examples);
       }
@@ -416,6 +488,23 @@ async function handle(
         entry.cases,
         scaffold,
       );
+      const newest = entry.persisted.takes[entry.persisted.takes.length - 1];
+      if (
+        newest &&
+        newest.results === null &&
+        newest.code === code &&
+        newest.lang === language
+      ) {
+        entry.persisted.takes = entry.persisted.takes.map((t) =>
+          t.seq === newest.seq ? { ...t, results: result } : t,
+        );
+      } else {
+        entry.persisted.takes = appendTake(entry.persisted.takes, {
+          code,
+          lang: language,
+          results: result,
+        });
+      }
       entry.persisted.lastRun = result;
       entry.persisted.code = code;
       entry.persisted.lang = language;
@@ -423,7 +512,7 @@ async function handle(
         entry.persisted.solved = true;
       }
       await persistEntry(entry);
-      sendJson(res, 200, result);
+      sendJson(res, 200, { result, takes: entry.persisted.takes });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       sendJson(res, 500, { cases: [], error: message });

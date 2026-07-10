@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import CodeEditor from './CodeEditor'
 import { mdLength, parseMd, renderMd } from './md'
 import {
+  addTake,
   createSession,
   getProblems,
   getSession,
@@ -12,6 +13,7 @@ import {
   startSession,
   submitTurn,
   type AppSettingsModels,
+  type PersistedTake,
   type Problem,
   type ProblemSummary,
   type StudentRunResult,
@@ -201,7 +203,8 @@ export default function App() {
   const [ingesting, setIngesting] = useState(false)
   const [loadingQuery, setLoadingQuery] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [run, setRun] = useState<StudentRunResult | null>(null)
+  const [takes, setTakes] = useState<PersistedTake[]>([])
+  const [selectedTake, setSelectedTake] = useState<number | null>(null)
   const [running, setRunning] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsModels, setSettingsModels] = useState<AppSettingsModels | null>(null)
@@ -285,13 +288,32 @@ export default function App() {
     return () => clearTimeout(timer)
   }, [code, lang, sessionId])
 
+  function applyTakes(next: PersistedTake[], selectSeq?: number) {
+    setTakes(next)
+    if (next.length === 0) {
+      setSelectedTake(null)
+      return
+    }
+    const seq = selectSeq ?? next[next.length - 1]!.seq
+    setSelectedTake(seq)
+  }
+
+  const selected = takes.find((t) => t.seq === selectedTake) ?? null
+  const selectedResults = selected?.results ?? null
+  const dirty =
+    takes.length > 0 && selected
+      ? code !== selected.code || lang !== selected.lang
+      : false
+  const caseTotal =
+    takes.find((t) => t.results && t.results.cases.length > 0)?.results?.cases.length ?? null
+
   function applyFreshSession(res: { sessionId: string; problem: Problem }) {
     setSessionId(res.sessionId)
     setProblem(res.problem)
     setNotes([])
     setInput('')
     setError(null)
-    setRun(null)
+    applyTakes([])
     const stub = snippetFor(res.problem, lang)
     setCode(stub)
     setSeed(stub)
@@ -340,7 +362,7 @@ export default function App() {
       const stub = snippetFor(res.problem, nextLang)
       setCode(res.code ? res.code : stub)
       setSeed(stub)
-      setRun(res.lastRun)
+      applyTakes(res.takes)
       setInput('')
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -415,21 +437,37 @@ export default function App() {
   function review() {
     const c = code.trim()
     if (!c || busy) return
-    void turn(reviewPrompt(c, run), '↳ review my work')
+    const newestWithResults = [...takes].reverse().find((t) => t.results != null)
+    void turn(reviewPrompt(c, newestWithResults?.results), '↳ review my work')
   }
 
   async function runTheExamples() {
     if (!sessionId || running || !code.trim() || !RUNNABLE.has(lang)) return
     setRunning(true)
+    setError(null)
     try {
-      const result = await runExamples(sessionId, code, lang)
-      setRun(result)
+      const { takes: next } = await runExamples(sessionId, code, lang)
+      applyTakes(next)
       refreshProblems()
     } catch (err) {
-      setRun({ cases: [], error: err instanceof Error ? err.message : String(err) })
+      setError(err instanceof Error ? err.message : String(err))
     } finally {
       setRunning(false)
     }
+  }
+
+  async function checkoutTake(seq: number) {
+    if (!sessionId || seq === selectedTake) return
+    const target = takes.find((t) => t.seq === seq)
+    if (!target) return
+    if (dirty) {
+      const res = await addTake(sessionId, code, lang)
+      applyTakes(res.takes, seq)
+    } else {
+      setSelectedTake(seq)
+    }
+    setCode(target.code)
+    setLang(target.lang)
   }
 
   function onLedgerRow(p: ProblemSummary) {
@@ -442,7 +480,6 @@ export default function App() {
 
   function changeLang(next: string) {
     setLang(next)
-    setRun(null)
     // Swap the scaffold only if the editor still holds the untouched stub (or is empty).
     if (code === seed || code.trim() === '') {
       const stub = snippetFor(problem, next)
@@ -498,7 +535,7 @@ export default function App() {
             setSessionId(null)
             setProblem(null)
             setNotes([])
-            setRun(null)
+            applyTakes([])
             setInput('')
             setError(null)
             setExpanded(null)
@@ -606,9 +643,10 @@ export default function App() {
                         type="button"
                         className="runbtn"
                         disabled={running}
+                        title={dirty ? 'changes since your last take' : undefined}
                         onClick={() => void runTheExamples()}
                       >
-                        {running ? 'running…' : 'run the examples'}
+                        {running ? 'running…' : dirty ? 'run the examples *' : 'run the examples'}
                       </button>
                     )}
                     <select className="langpick" value={lang} onChange={(e) => changeLang(e.target.value)}>
@@ -625,27 +663,73 @@ export default function App() {
                     <CodeEditor value={code} onChange={setCode} language={lang} />
                   </div>
                 </div>
-                {run && (
-                  <div className="runresults">
-                    {run.error ? (
-                      <div className="fail">{run.error}</div>
-                    ) : (
-                      run.cases.map((c, i) => (
-                        <div key={i} className={c.pass ? 'pass' : 'fail'}>
-                          <span className="mark">{c.pass ? '✓' : '✗'}</span>
-                          <span className="disp">{c.display}</span>
-                          {!c.pass &&
-                            (c.error ? (
-                              <span className="detail"> → {c.error}</span>
-                            ) : (
-                              <span className="detail">
-                                {' '}
-                                → got {c.got} (want {c.expected})
-                              </span>
-                            ))}
-                        </div>
-                      ))
-                    )}
+                {takes.length > 0 && (
+                  <div className="takes-rail">
+                    <div className="takes-chips">
+                      {takes.map((t) => {
+                        const res = t.results
+                        const total = res?.cases.length ?? caseTotal
+                        const pass =
+                          res && !res.error ? res.cases.filter((c) => c.pass).length : null
+                        const label =
+                          res == null
+                            ? total == null
+                              ? `take ${t.seq} · –/–`
+                              : `take ${t.seq} · –/${total}`
+                            : res.error
+                              ? `take ${t.seq} · –/${total ?? '–'}`
+                              : `take ${t.seq} · ${pass}/${total}`
+                        const allPass =
+                          res != null &&
+                          !res.error &&
+                          res.cases.length > 0 &&
+                          res.cases.every((c) => c.pass)
+                        const someFail =
+                          res != null &&
+                          !res.error &&
+                          res.cases.some((c) => !c.pass)
+                        const chipClass = [
+                          'take-chip',
+                          t.seq === selectedTake ? 'selected' : '',
+                          res == null || res.error ? 'unrun' : allPass ? 'allpass' : someFail ? 'somefail' : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')
+                        return (
+                          <button
+                            key={t.seq}
+                            type="button"
+                            className={chipClass}
+                            onClick={() => void checkoutTake(t.seq)}
+                          >
+                            {label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                    <div className="takes-cases">
+                      {selectedResults == null ? (
+                        <div className="unrun-note">no results yet — run the examples</div>
+                      ) : selectedResults.error ? (
+                        <div className="fail">{selectedResults.error}</div>
+                      ) : (
+                        selectedResults.cases.map((c, i) => (
+                          <div key={i} className={c.pass ? 'pass' : 'fail'}>
+                            <span className="mark">{c.pass ? '✓' : '✗'}</span>
+                            <span className="disp">{c.display}</span>
+                            {!c.pass &&
+                              (c.error ? (
+                                <span className="detail"> → {c.error}</span>
+                              ) : (
+                                <span className="detail">
+                                  {' '}
+                                  → got {c.got} (want {c.expected})
+                                </span>
+                              ))}
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </div>
                 )}
               </section>
