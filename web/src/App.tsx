@@ -957,8 +957,22 @@ export default function App() {
                   <p className="constraints">{problem.constraints}</p>
                 </div>
                 {showVocab && vocab && (
-                  <aside className="vocab" aria-label="the vocabulary">
-                    <p className="eyebrow">the vocabulary</p>
+                  <aside className="vocab chalk lit" aria-label="the vocab">
+                    <div className="vocab-head">
+                      <span className="vocab-title">the vocab</span>
+                      <button
+                        type="button"
+                        className="vocab-info"
+                        aria-label="what is the vocab?"
+                        aria-describedby="vocab-tip"
+                      >
+                        i
+                      </button>
+                      <span className="vocab-tip" id="vocab-tip" role="tooltip">
+                        the ideas this problem is built on. the smudged ones I won't say yet —
+                        commit to an idea of your own and I'll write it up here.
+                      </span>
+                    </div>
                     <div className="vocab-words">
                       {vocab.earned.map((t) => (
                         <span key={t} className={`vocab-word${fresh.has(t) ? ' fresh' : ''}`}>{t}</span>
