@@ -26,30 +26,39 @@ touches the product's soul.
    `metaData` (function signature) is already fetched — detect void-return +
    mutated-arg problems at ingest and compare the mutated argument.
 
-5. **The stress "oracle" is a 3-test graduate.** The reference is verified
+5. **The statement is a lossy retelling.** Ingest lets the card LLM re-emit
+   the problem statement, and it paraphrases enough that you end up back on
+   leetcode.com double-checking the real wording. It's also plain text, so
+   `n`, `nums[i]` etc. lose their code styling — the statement should be
+   markdown. And there's no link back to the problem for submitting on LC.
+   *Path:* keep the fetched statement verbatim (HTML → markdown at fetch,
+   inline code preserved), ignore the LLM's rewrite of it, carry the
+   slug/URL on the card and render a "submit on LeetCode" link.
+
+6. **The stress "oracle" is a 3-test graduate.** The reference is verified
    against the official examples only, then grades adversarial inputs. The
    cross-provider differential design exists (HANDOFF Round C history) if
    wrong stress cases ever become a real problem; LC's authenticated Run
    endpoint is the true-oracle upgrade.
 
-6. **`completeJson` is parse-and-pray.** Agent CLIs return prose; we unfence
+7. **`completeJson` is parse-and-pray.** Agent CLIs return prose; we unfence
    and `JSON.parse`. Load-bearing in ingest. *Path:* API clients with
    structured output — blocked on willingness to pay per-token.
 
-7. **`web/src/App.tsx` is a ~1,700-line God component** (~25 useStates: fan
+8. **`web/src/App.tsx` is a ~1,700-line God component** (~25 useStates: fan
    math, drag physics, blank renderer, vocab, takes…). Works; scales badly.
    *Path:* extract feature components next time one grows.
 
-8. **Resume drops the theater.** Gestures are ephemeral by design, so
+9. **Resume drops the theater.** Gestures are ephemeral by design, so
    restored transcripts reference cards that aren't shown, filled scaffold
    blanks come back empty, POINT chips vanish. *Path:* persist minimal
    gesture/blank state per note if it grates.
 
-9. **Solved/pass logic is duplicated** client (`takeAllPass`) and server
+10. **Solved/pass logic is duplicated** client (`takeAllPass`) and server
    (`officialAllPass`); it drifted once already. *Path:* server-computed
    per-take verdicts.
 
-10. **Small stuff:** session titles are your first message verbatim ("hmmm,
+11. **Small stuff:** session titles are your first message verbatim ("hmmm,
     can you scaffold me"); the vocab info tooltip is hover-only (no touch);
     ~2MB of never-instantiated Monaco workers ship in dist; the no-rounded-
     rects rule has a 2px exception on the chalk piece; 345MB unpacked is the
