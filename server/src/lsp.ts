@@ -4,6 +4,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { WebSocketServer, type WebSocket } from 'ws';
+import { appPaths } from './appPaths.js';
 
 const CSPROJ = `<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
@@ -27,7 +28,6 @@ const PYRIGHT_LANGSERVER = path.join(
 type LangId = 'csharp' | 'python';
 
 type LangConfig = {
-  scratch: string;
   file: string;
   setup: (root: string, filePath: string) => void;
   spawn: (cwd: string) => ChildProcessWithoutNullStreams;
@@ -35,7 +35,6 @@ type LangConfig = {
 
 const LSP_LANGS: Record<LangId, LangConfig> = {
   csharp: {
-    scratch: '.lsp-scratch',
     file: 'Solution.cs',
     setup: (root, filePath) => {
       fs.writeFileSync(path.join(root, 'scratch.csproj'), CSPROJ, 'utf8');
@@ -51,7 +50,6 @@ const LSP_LANGS: Record<LangId, LangConfig> = {
       }),
   },
   python: {
-    scratch: '.lsp-scratch-py',
     file: 'solution.py',
     setup: (root, filePath) => {
       if (!fs.existsSync(filePath)) {
@@ -72,6 +70,11 @@ const LSP_LANGS: Record<LangId, LangConfig> = {
   },
 };
 
+function lspScratchRoot(lang: LangId): string {
+  const base = appPaths().lspScratchDir;
+  return lang === 'python' ? `${base}-py` : base;
+}
+
 const ready = new Set<LangId>();
 
 function isLangId(v: string): v is LangId {
@@ -85,7 +88,7 @@ export function ensureLspWorkspace(lang: LangId): {
   fileUri: string;
 } {
   const cfg = LSP_LANGS[lang];
-  const root = path.resolve(SERVER_ROOT, cfg.scratch);
+  const root = lspScratchRoot(lang);
   const filePath = path.join(root, cfg.file);
   if (!ready.has(lang)) {
     fs.mkdirSync(root, { recursive: true });

@@ -1,11 +1,8 @@
 import { mkdir, readdir, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { appPaths } from './appPaths.js';
 import type { PersistedSession, PersistedTake } from './sessionStore.js';
 import type { StudentRunResult } from './engine.js';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const serverRoot = path.resolve(__dirname, '..');
 
 const LANG_EXT: Record<string, string> = {
   python: 'py',
@@ -17,10 +14,7 @@ const LANG_EXT: Record<string, string> = {
 const FAIL_DETAIL_CAP = 96;
 
 function scratchRoot(): string {
-  if (process.env.TUTOR_TEACHER_SCRATCH_DIR) {
-    return path.resolve(process.env.TUTOR_TEACHER_SCRATCH_DIR);
-  }
-  return path.join(serverRoot, '.teacher-scratch');
+  return appPaths().teacherScratchDir;
 }
 
 /** Session ids are UUIDs or restored ids — keep path construction plainly safe. */

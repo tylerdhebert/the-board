@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { CaseSpec } from './exampleCases.js';
 import { killTree } from './llm.js';
@@ -32,7 +32,14 @@ const KILL_GRACE_MS = 5_000;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SERVER_DIR = join(__dirname, '..', '..', 'server');
-const CSHARP_SCRATCH = join(SERVER_DIR, '.run-scratch', 'csharp');
+
+/** Lazy so server can set TUTOR_RUN_SCRATCH_DIR before first use. */
+function csharpScratch(): string {
+  const runScratch = process.env.TUTOR_RUN_SCRATCH_DIR
+    ? resolve(process.env.TUTOR_RUN_SCRATCH_DIR)
+    : join(SERVER_DIR, '.run-scratch');
+  return join(runScratch, 'csharp');
+}
 
 const CSPROJ = `<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
@@ -358,8 +365,9 @@ static class __StudentHarness {
 }
 
 async function ensureCsharpScratch(): Promise<void> {
-  await mkdir(CSHARP_SCRATCH, { recursive: true });
-  await writeFile(join(CSHARP_SCRATCH, 'run.csproj'), CSPROJ, 'utf8');
+  const scratch = csharpScratch();
+  await mkdir(scratch, { recursive: true });
+  await writeFile(join(scratch, 'run.csproj'), CSPROJ, 'utf8');
 }
 
 async function runPython(code: string, entry: string, cases: CaseSpec[]): Promise<StudentRunResult> {
@@ -396,15 +404,16 @@ async function runTsJs(
 
 async function runCsharp(code: string, entry: string, cases: CaseSpec[]): Promise<StudentRunResult> {
   await ensureCsharpScratch();
-  const programPath = join(CSHARP_SCRATCH, 'Program.cs');
-  const casesPath = join(CSHARP_SCRATCH, 'cases.json');
+  const scratch = csharpScratch();
+  const programPath = join(scratch, 'Program.cs');
+  const casesPath = join(scratch, 'cases.json');
   await writeFile(casesPath, JSON.stringify(cases.map((c) => c.args)), 'utf8');
   await writeFile(programPath, buildCsharpProgram(code, entry, casesPath), 'utf8');
 
   const { stdout, stderr, timedOut, code: exitCode } = await runChild(
     'dotnet',
-    ['run', '--project', CSHARP_SCRATCH],
-    { cwd: CSHARP_SCRATCH, timeoutMs: CSHARP_TIMEOUT_MS },
+    ['run', '--project', scratch],
+    { cwd: scratch, timeoutMs: CSHARP_TIMEOUT_MS },
   );
 
   if (timedOut) {

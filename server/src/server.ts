@@ -1,9 +1,10 @@
 import http from 'node:http';
 import { randomUUID } from 'node:crypto';
-import { mkdirSync } from 'node:fs';
+import { createReadStream, existsSync, mkdirSync, statSync } from 'node:fs';
+import { cp, mkdir, readdir, rm } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { URL } from 'node:url';
+import { appPaths } from './appPaths.js';
 import {
   JsonlTracer,
   TutorSession,
@@ -39,12 +40,11 @@ import {
 } from './teacherScratch.js';
 
 const PORT = Number(process.env.PORT ?? 8787);
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(__dirname, '../..');
-const logsDir = process.env.TUTOR_LOGS_DIR
-  ? path.resolve(process.env.TUTOR_LOGS_DIR)
-  : path.join(repoRoot, 'logs');
-mkdirSync(logsDir, { recursive: true });
+const paths = appPaths();
+// Engine package cannot import server — push resolved locations via env before first use.
+process.env.TUTOR_LOGS_DIR = paths.logsDir;
+process.env.TUTOR_RUN_SCRATCH_DIR = paths.runScratchDir;
+mkdirSync(paths.logsDir, { recursive: true });
 
 function nextTakeSeq(takes: PersistedTake[]): number {
   const last = takes[takes.length - 1];
@@ -68,7 +68,7 @@ function appendTake(
 }
 
 function sessionTracer(sessionId: string): JsonlTracer {
-  return new JsonlTracer(path.join(logsDir, `${sessionId}.jsonl`));
+  return new JsonlTracer(path.join(paths.logsDir, `${sessionId}.jsonl`));
 }
 
 function firstStudentNote(s: PersistedSession): string {
@@ -87,6 +87,111 @@ async function pruneEmptySessions(): Promise<void> {
   if (stale.length === 0) return;
   deleteSessions(stale.map((s) => s.id));
   console.log(`pruned ${stale.length} empty session(s)`);
+}
+
+async function seedCardsIfNeeded(): Promise<void> {
+  if (!paths.seedCardsDir) return;
+  let empty = false;
+  try {
+    const entries = await readdir(paths.cardsDir);
+    empty = entries.length === 0;
+  } catch {
+    empty = true;
+  }
+  if (!empty) return;
+  await mkdir(paths.cardsDir, { recursive: true });
+  const seeds = await readdir(paths.seedCardsDir);
+  await Promise.all(
+    seeds
+      .filter((name) => name.endsWith('.card.json') || name.endsWith('.snippets.json'))
+      .map((name) =>
+        cp(path.join(paths.seedCardsDir!, name), path.join(paths.cardsDir, name)),
+      ),
+  );
+}
+
+async function sweepTeacherScratch(): Promise<void> {
+  try {
+    const root = paths.teacherScratchDir;
+    const sessions = await listSessions();
+    const live = new Set(sessions.map((s) => s.id));
+    const entries = await readdir(root, { withFileTypes: true });
+    await Promise.all(
+      entries
+        .filter((ent) => ent.isDirectory() && !live.has(ent.name))
+        .map((ent) => rm(path.join(root, ent.name), { recursive: true, force: true })),
+    );
+  } catch {
+    // Sweep failure must never block boot.
+  }
+}
+
+const STATIC_TYPES: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.woff2': 'font/woff2',
+  '.json': 'application/json',
+  '.ico': 'image/x-icon',
+  '.map': 'application/json',
+};
+
+function safeStaticPath(root: string, urlPath: string): string | null {
+  const decoded = decodeURIComponent(urlPath);
+  const rel = decoded.replace(/^\/+/, '');
+  const full = path.resolve(root, rel);
+  const rootResolved = path.resolve(root);
+  if (full !== rootResolved && !full.startsWith(rootResolved + path.sep)) {
+    return null;
+  }
+  return full;
+}
+
+function contentTypeFor(filePath: string): string {
+  return STATIC_TYPES[path.extname(filePath).toLowerCase()] ?? 'application/octet-stream';
+}
+
+function sendFile(res: http.ServerResponse, filePath: string): void {
+  const type = contentTypeFor(filePath);
+  res.writeHead(200, { 'Content-Type': type });
+  createReadStream(filePath).pipe(res);
+}
+
+function tryServeStatic(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  pathname: string,
+): boolean {
+  if (!paths.webDistDir) return false;
+  if ((req.method ?? 'GET') !== 'GET') return false;
+  if (pathname.startsWith('/api') || pathname.startsWith('/lsp')) return false;
+
+  const root = paths.webDistDir;
+  const indexPath = path.join(root, 'index.html');
+  let filePath = safeStaticPath(root, pathname === '/' ? '/index.html' : pathname);
+  if (filePath === null) {
+    res.writeHead(403);
+    res.end('Forbidden');
+    return true;
+  }
+  try {
+    if (existsSync(filePath) && statSync(filePath).isFile()) {
+      sendFile(res, filePath);
+      return true;
+    }
+  } catch {
+    /* fall through to SPA */
+  }
+  // SPA fallback
+  if (existsSync(indexPath) && statSync(indexPath).isFile()) {
+    sendFile(res, indexPath);
+    return true;
+  }
+  res.writeHead(404);
+  res.end('Not found');
+  return true;
 }
 
 type SessionEntry = {
@@ -695,6 +800,8 @@ async function handle(
     return;
   }
 
+  if (tryServeStatic(req, res, pathname)) return;
+
   sendJson(res, 404, { error: 'not found' });
 }
 
@@ -711,10 +818,24 @@ const server = http.createServer((req, res) => {
 
 attachLspBridge(server);
 
-server.listen(PORT, () => {
-  void pruneEmptySessions()
-    .catch((err) => console.warn('prune failed', err))
-    .finally(() => {
-      console.log(`tutor server on http://localhost:${PORT}`);
-    });
+async function boot(): Promise<void> {
+  await seedCardsIfNeeded();
+  await sweepTeacherScratch();
+
+  server.listen(PORT, () => {
+    const addr = server.address();
+    const actualPort =
+      typeof addr === 'object' && addr !== null ? addr.port : PORT;
+    console.log(`TUTOR_READY {"port":${actualPort}}`);
+    void pruneEmptySessions()
+      .catch((err) => console.warn('prune failed', err))
+      .finally(() => {
+        console.log(`tutor server on http://localhost:${actualPort}`);
+      });
+  });
+}
+
+boot().catch((err: unknown) => {
+  console.error('boot failed', err);
+  process.exit(1);
 });

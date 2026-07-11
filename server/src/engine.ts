@@ -1,6 +1,5 @@
 import { access, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import {
   createClient,
   JsonlTracer,
@@ -17,13 +16,12 @@ import { ingest } from '../../engine/src/ingest.js';
 import { extractCases, type CaseSpec } from '../../engine/src/exampleCases.js';
 import { runStudentCode, type StudentRunResult } from '../../engine/src/runStudentCode.js';
 import { generateStressCases } from '../../engine/src/stressCases.js';
+import { appPaths } from './appPaths.js';
 
 export { TutorSession, extractCases, runStudentCode, JsonlTracer, createClient, generateStressCases };
 export type { CodeSnippet, Message, ProblemCard, SessionModels, CaseSpec, StudentRunResult };
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(__dirname, '../..');
-const cardsDir = path.join(repoRoot, 'cards');
+const cardsDir = appPaths().cardsDir;
 
 export const DEFAULT_MODELS: SessionModels = {
   teacher: { backend: 'codex', model: 'gpt-5.5' },

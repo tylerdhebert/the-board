@@ -2,13 +2,12 @@ import { existsSync, readdirSync, readFileSync, renameSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
+import { appPaths } from './appPaths.js';
 import type { Message, StudentRunResult } from './engine.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '../..');
-const dbPath = process.env.TUTOR_DB_PATH
-  ? path.resolve(process.env.TUTOR_DB_PATH)
-  : path.join(repoRoot, 'tutor.db');
+const dbPath = appPaths().dbPath;
 const sessionsDir = path.join(repoRoot, 'sessions');
 const migratedDir = path.join(repoRoot, 'sessions.migrated');
 
