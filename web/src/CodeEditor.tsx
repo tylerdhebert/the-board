@@ -6,10 +6,14 @@ import {
   type LspHandle,
 } from './lsp/csharpLsp'
 
+type PointTarget = { line: number; quote: string }
+
 type Props = {
   value: string
   onChange: (v: string) => void
   language: string
+  point?: PointTarget | null
+  onPointInvalid?: () => void
 }
 
 type LspLang = 'csharp' | 'python'
@@ -22,7 +26,13 @@ function isLspLang(lang: string): lang is LspLang {
 const THEME = 'chalkboard'
 const GHOST_COLOR = 'rgba(58, 74, 65, 0.6)' // #3a4a41 at ~60%
 
-export default function CodeEditor({ value, onChange, language }: Props) {
+export default function CodeEditor({
+  value,
+  onChange,
+  language,
+  point = null,
+  onPointInvalid,
+}: Props) {
   const monacoRef = useRef<Parameters<OnMount>[1] | null>(null)
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null)
   const lspMapRef = useRef<Map<LspLang, LspHandle>>(new Map())
@@ -32,6 +42,10 @@ export default function CodeEditor({ value, onChange, language }: Props) {
   const genRef = useRef(0)
   const ghostRef = useRef<HTMLDivElement | null>(null)
   const disposablesRef = useRef<{ dispose: () => void }[]>([])
+  const pointDecoIdsRef = useRef<string[]>([])
+  const activePointRef = useRef<PointTarget | null>(null)
+  const onPointInvalidRef = useRef(onPointInvalid)
+  onPointInvalidRef.current = onPointInvalid
 
   const syncActive = (current: string) => {
     for (const [lang, handle] of lspMapRef.current) {
@@ -125,6 +139,16 @@ export default function CodeEditor({ value, onChange, language }: Props) {
     ghost.textContent = numbers.join('\n')
   }
 
+  const clearPointDecorations = () => {
+    const editor = editorRef.current
+    if (editor && pointDecoIdsRef.current.length > 0) {
+      pointDecoIdsRef.current = editor.deltaDecorations(pointDecoIdsRef.current, [])
+    } else {
+      pointDecoIdsRef.current = []
+    }
+    activePointRef.current = null
+  }
+
   const onMount: OnMount = (editor, monaco) => {
     monaco.editor.defineTheme(THEME, {
       base: 'vs-dark',
@@ -198,6 +222,59 @@ export default function CodeEditor({ value, onChange, language }: Props) {
     requestAnimationFrame(() => updateGhostMargin())
   }, [value])
 
+  // POINT decoration: chalk underline + gutter arrow; invalidate when the line drifts.
+  useEffect(() => {
+    const editor = editorRef.current
+    const monaco = monacoRef.current
+    clearPointDecorations()
+    if (!editor || !monaco || !point) return
+
+    const model = editor.getModel()
+    if (!model) return
+    const { line, quote } = point
+    if (line < 1 || line > model.getLineCount()) {
+      onPointInvalidRef.current?.()
+      return
+    }
+    if (model.getLineContent(line).trim() !== quote.trim()) {
+      onPointInvalidRef.current?.()
+      return
+    }
+
+    activePointRef.current = point
+    pointDecoIdsRef.current = editor.deltaDecorations([], [
+      {
+        range: new monaco.Range(line, 1, line, model.getLineMaxColumn(line)),
+        options: {
+          isWholeLine: true,
+          className: 'point-line',
+          glyphMarginClassName: 'point-glyph',
+          stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+        },
+      },
+    ])
+
+    const sub = editor.onDidChangeModelContent(() => {
+      const active = activePointRef.current
+      if (!active) return
+      const m = editor.getModel()
+      if (
+        !m ||
+        active.line < 1 ||
+        active.line > m.getLineCount() ||
+        m.getLineContent(active.line).trim() !== active.quote.trim()
+      ) {
+        clearPointDecorations()
+        onPointInvalidRef.current?.()
+      }
+    })
+
+    return () => {
+      sub.dispose()
+      clearPointDecorations()
+    }
+  }, [point])
+
   useEffect(() => {
     return () => {
       genRef.current += 1
@@ -208,6 +285,7 @@ export default function CodeEditor({ value, onChange, language }: Props) {
       disposablesRef.current = []
       ghostRef.current?.remove()
       ghostRef.current = null
+      clearPointDecorations()
     }
   }, [])
 
@@ -225,6 +303,7 @@ export default function CodeEditor({ value, onChange, language }: Props) {
         fontSize: 13.5,
         minimap: { enabled: false },
         lineNumbers: 'on',
+        glyphMargin: true,
         scrollBeyondLastLine: false,
         padding: { top: 14, bottom: 14 },
         renderLineHighlight: 'none',

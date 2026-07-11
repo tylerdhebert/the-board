@@ -5,12 +5,76 @@ import { PROMPTS_DIR } from './paths.js';
 import { bullets, fillTemplate, renderTranscript } from './render.js';
 import type { Message, ProblemCard, TutorMode } from './types.js';
 
-export interface TeacherReply { mode: TutorMode; reply: string; raw: string }
+export interface TeacherReply {
+  mode: TutorMode;
+  reply: string;
+  raw: string;
+  point?: { line: number; quote: string };
+}
 
 /** Optional per-turn board context for the teacher (cwd + already-rendered lines). */
 export interface TeacherTurnContext {
   cwd?: string;
   boardContext?: string;
+}
+
+const POINT_RE = /^POINT:\s*(\d+)\s*\|\s*(.+)$/i;
+const POINT_LOOKS_RE = /^POINT:/i;
+
+/**
+ * Pure parser for teacher raw output: MODE line, optional POINT gesture,
+ * then prose. Used by teacherTurn and unit-driven by the parse check.
+ */
+export function parseTeacherReply(raw: string): TeacherReply {
+  const lines = raw.split(/\r?\n/);
+  let firstNonEmptyIdx = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i]!.trim() !== '') {
+      firstNonEmptyIdx = i;
+      break;
+    }
+  }
+
+  if (firstNonEmptyIdx < 0) {
+    return { mode: 'socratic', reply: raw.trim(), raw };
+  }
+
+  const match = lines[firstNonEmptyIdx]!.match(/^MODE:\s*(socratic|analog|scaffold)\b/i);
+  if (!match) {
+    // No MODE — fallback replies stay as-is; do not attempt POINT parsing.
+    return { mode: 'socratic', reply: raw.trim(), raw };
+  }
+
+  const mode = match[1]!.toLowerCase() as TutorMode;
+  let bodyStart = firstNonEmptyIdx + 1;
+  let point: { line: number; quote: string } | undefined;
+
+  // Next non-empty line may be a POINT gesture control line.
+  let nextNonEmptyIdx = -1;
+  for (let i = bodyStart; i < lines.length; i++) {
+    if (lines[i]!.trim() !== '') {
+      nextNonEmptyIdx = i;
+      break;
+    }
+  }
+
+  if (nextNonEmptyIdx >= 0 && POINT_LOOKS_RE.test(lines[nextNonEmptyIdx]!)) {
+    const pointMatch = lines[nextNonEmptyIdx]!.match(POINT_RE);
+    if (pointMatch) {
+      const line = Number(pointMatch[1]);
+      const quote = pointMatch[2]!.trim();
+      if (Number.isInteger(line) && line > 0 && quote !== '') {
+        point = { line, quote };
+      }
+    }
+    // Strip the control line whether or not it validated — half-formed
+    // POINT lines must never reach the student.
+    bodyStart = nextNonEmptyIdx + 1;
+  }
+
+  let reply = lines.slice(bodyStart).join('\n');
+  reply = reply.replace(/^\s*\n+/, '');
+  return point ? { mode, reply, raw, point } : { mode, reply, raw };
 }
 
 export async function teacherTurn(
@@ -58,24 +122,5 @@ export async function teacherTurn(
     ...(turnContext?.cwd ? { cwd: turnContext.cwd } : {}),
   });
 
-  const lines = raw.split(/\r?\n/);
-  let firstNonEmptyIdx = -1;
-  for (let i = 0; i < lines.length; i++) {
-    if (lines[i]!.trim() !== '') {
-      firstNonEmptyIdx = i;
-      break;
-    }
-  }
-
-  if (firstNonEmptyIdx >= 0) {
-    const match = lines[firstNonEmptyIdx]!.match(/^MODE:\s*(socratic|analog|scaffold)\b/i);
-    if (match) {
-      const mode = match[1]!.toLowerCase() as TutorMode;
-      let reply = lines.slice(firstNonEmptyIdx + 1).join('\n');
-      reply = reply.replace(/^\s*\n+/, '');
-      return { mode, reply, raw };
-    }
-  }
-
-  return { mode: 'socratic', reply: raw.trim(), raw };
+  return parseTeacherReply(raw);
 }

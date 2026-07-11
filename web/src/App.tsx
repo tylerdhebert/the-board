@@ -181,6 +181,8 @@ type Note = {
   unlocked?: string[]
   redrafted?: boolean
   revealing?: boolean
+  /** Stashed from turn; resolved line after reveal validation (chip only if set). */
+  point?: { line: number; quote: string }
 }
 
 const STAGE_COPY: Record<TurnStage, string> = {
@@ -350,6 +352,7 @@ export default function App() {
   const [openStack, setOpenStack] = useState<null | 'examples' | 'tougher'>(null)
   const [vocab, setVocab] = useState<Vocab | null>(null)
   const [fresh, setFresh] = useState<Set<string>>(() => new Set())
+  const [point, setPoint] = useState<{ line: number; quote: string } | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsModels, setSettingsModels] = useState<AppSettingsModels | null>(null)
   const [settingsBackends, setSettingsBackends] = useState<string[]>([])
@@ -362,6 +365,10 @@ export default function App() {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const editorSaveRef = useRef<Promise<void>>(Promise.resolve())
   const savedLangRef = useRef(lang)
+  const codeRef = useRef(code)
+  codeRef.current = code
+  const notesSnapRef = useRef(notes)
+  notesSnapRef.current = notes
 
   function refreshProblems() {
     getProblems().then(setProblems).catch(() => {})
@@ -601,6 +608,7 @@ export default function App() {
     setSessionId(res.sessionId)
     setProblem(res.problem)
     setNotes([])
+    setPoint(null)
     setInput('')
     setError(null)
     applyTakes([])
@@ -663,6 +671,7 @@ export default function App() {
       setOpenStack(null)
       setVocab(res.vocab)
       setFresh(new Set())
+      setPoint(null)
       setInput('')
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -715,6 +724,7 @@ export default function App() {
           unlocked: r.unlockedThisTurn,
           redrafted: r.redrafted,
           revealing: true,
+          ...(r.point ? { point: r.point } : {}),
         },
       ])
     } catch (err) {
@@ -725,9 +735,42 @@ export default function App() {
     }
   }
 
+  function resolvePoint(
+    candidate: { line: number; quote: string },
+    source: string,
+  ): { line: number; quote: string } | null {
+    const lines = source.split(/\r?\n/)
+    const quote = candidate.quote.trim()
+    if (lines[candidate.line - 1]?.trim() === quote) {
+      return { line: candidate.line, quote }
+    }
+    const matches: number[] = []
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i]!.trim() === quote) matches.push(i + 1)
+    }
+    if (matches.length === 1) return { line: matches[0]!, quote }
+    return null
+  }
+
   function finishReveal(index: number) {
-    const unlocked = notes[index]?.unlocked
-    setNotes((p) => p.map((n, i) => (i === index ? { ...n, revealing: false } : n)))
+    const note = notesSnapRef.current[index]
+    const unlocked = note?.unlocked
+    const resolved = note?.point ? resolvePoint(note.point, codeRef.current) : null
+    setNotes((p) =>
+      p.map((n, i) => {
+        if (i !== index) return n
+        const next: Note = { ...n, revealing: false }
+        if (n.point) {
+          if (resolved) next.point = resolved
+          else delete next.point
+        }
+        return next
+      }),
+    )
+    if (note?.point) {
+      // Activate after reveal (or clear if validation dropped it / replace prior).
+      setPoint(resolved)
+    }
     if (!unlocked?.length || !vocab) return
     const already = new Set(vocab.earned)
     const appended = unlocked.filter((t) => !already.has(t))
@@ -812,6 +855,7 @@ export default function App() {
     }
     setCode(target.code)
     setLang(target.lang)
+    setPoint(null)
   }
 
   async function resetToScaffold() {
@@ -823,6 +867,7 @@ export default function App() {
     const stub = snippetFor(problem, lang)
     setCode(stub)
     setSeed(stub)
+    setPoint(null)
   }
 
   function onLedgerRow(p: ProblemSummary) {
@@ -835,6 +880,7 @@ export default function App() {
 
   function changeLang(next: string) {
     setLang(next)
+    setPoint(null)
     // Swap the scaffold only if the editor still holds the untouched stub (or is empty).
     if (
       normalizeForDirty(code) === normalizeForDirty(seed) ||
@@ -909,6 +955,7 @@ export default function App() {
             setSessionId(null)
             setProblem(null)
             setNotes([])
+            setPoint(null)
             applyTakes([])
             setSessionSolved(false)
             setOpenStack(null)
@@ -1115,7 +1162,13 @@ export default function App() {
                 <div className={`workrow${attemptsCollapsed ? ' rail-collapsed' : ''}`}>
                   <div className="editor-shell chalk lit">
                     <div className="monaco-host">
-                      <CodeEditor value={code} onChange={setCode} language={lang} />
+                      <CodeEditor
+                        value={code}
+                        onChange={setCode}
+                        language={lang}
+                        point={point}
+                        onPointInvalid={() => setPoint(null)}
+                      />
                     </div>
                   </div>
                   {takes.length > 0 && (
@@ -1425,6 +1478,9 @@ export default function App() {
                   <span>{n.role === 'tutor' ? 'tutor' : 'you'}</span>
                   {n.mode && <span className={`badge ${n.mode}`}>{n.mode}</span>}
                   {n.redrafted && <span className="badge revised">reworded</span>}
+                  {n.point && !n.revealing && (
+                    <span className="badge point">↳ line {n.point.line}</span>
+                  )}
                 </div>
                 {n.revealing ? (
                   <RevealingText

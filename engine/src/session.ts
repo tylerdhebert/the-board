@@ -17,6 +17,7 @@ export interface TurnResult {
   gate: GateVerdict;
   redrafted: boolean;
   unlockedThisTurn: string[];
+  point?: { line: number; quote: string };
 }
 
 /** Optional board context for the teacher only (cwd + rendered BOARD lines). */
@@ -127,8 +128,12 @@ export class TutorSession {
       turnContext,
     );
     onStage?.('gate');
+    const gateDraft = (reply: typeof t) =>
+      reply.point
+        ? reply.reply + `\n\n[gesture: points at editor line ${reply.point.line}: \`${reply.point.quote}\`]`
+        : reply.reply;
     let verdict = await gateCheck(
-      this.gateClient, this.card, t.mode, studentMessage, t.reply, this._lockedTerms, this.models.gate.model,
+      this.gateClient, this.card, t.mode, studentMessage, gateDraft(t), this._lockedTerms, this.models.gate.model,
     );
     let redrafted = false;
 
@@ -141,7 +146,7 @@ export class TutorSession {
       );
       onStage?.('gate');
       verdict = await gateCheck(
-        this.gateClient, this.card, t.mode, studentMessage, t.reply, this._lockedTerms, this.models.gate.model,
+        this.gateClient, this.card, t.mode, studentMessage, gateDraft(t), this._lockedTerms, this.models.gate.model,
       );
       redrafted = true;
     }
@@ -167,6 +172,7 @@ export class TutorSession {
       gate: verdict,
       redrafted,
       unlockedThisTurn,
+      ...(t.point ? { point: t.point } : {}),
     };
   }
 }

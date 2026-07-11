@@ -679,6 +679,7 @@ async function handle(
         mode: result.mode,
         unlockedThisTurn: result.unlockedThisTurn,
         redrafted: result.redrafted,
+        point: result.point,
       });
       res.end();
       try {

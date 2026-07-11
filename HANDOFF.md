@@ -322,8 +322,25 @@ Concise pickup list for the next agent (codex):
    clicks from two sessions of the same card can double-generate
    (per-session inflight keys); teacher-scratch dirs accumulate per
    session (needs a userData/cleanup story if the app is ever packaged).
-8. **Next:** Round D, which must be discussed with the user before building.
-9. **Conventions:** implementation goes to CLI subagents (implementer =
+8. **Round D in progress (2026-07-10/11 session, discussed + agreed with
+   the user):** (1) the vocab shipped and evolved into a real mounted
+   blackboard (chalk smears → earned words, wood frame, chalk rail,
+   near-black surface, spans free desk width, info tooltip); (2) the
+   cases became ruled flash cards — two stacks + Balatro fan overlay,
+   hover-straighten, run state painted on cards, always visible (payload
+   now carries public example + stress rows); (3) the GESTURE PROTOCOL is
+   designed in `docs/gestures.md` (read it before adding gestures —
+   includes the user's exact prompt-wording decision and the SHOW-in-chat
+   design) and POINT shipped: teacher control line `POINT: <line> | <quote>`
+   after MODE, gate sees a gesture summary, client quote-snaps/validates,
+   chalk decoration + `↳ line N` note chip, drift invalidation, ephemeral.
+   NEXT gestures: SHOW (card copy dragged INTO the chat note — not the fan),
+   then TAP (vocab smudge wiggle). Also shipped: global 5px flat scrollbars
+   (do NOT reintroduce `scrollbar-width` — it overrides webkit styling and
+   resurrects native bars).
+9. **Next after gestures:** Round D-3 scaffold blanks (deferred until
+   scaffold mode earns it), provider-check button (maybe), backlog items.
+10. **Conventions:** implementation goes to CLI subagents (implementer =
    grok-4.5-xhigh via the cli-subagents skill's cursor-subagent.ps1; spec
    in `.agent-tasks/*.md`, short flag-free prompt "read X and implement it
    exactly"); orchestrator writes the spec, reviews the diff, verifies

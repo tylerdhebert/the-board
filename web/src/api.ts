@@ -83,6 +83,7 @@ export interface TurnResult {
   mode: 'socratic' | 'analog' | 'scaffold'
   unlockedThisTurn: string[]
   redrafted: boolean
+  point?: { line: number; quote: string }
 }
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
