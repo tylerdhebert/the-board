@@ -3,6 +3,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type KeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
@@ -94,6 +95,44 @@ function takeScoreLabel(t: PersistedTake, knownTotal: number | null): string {
   if (tougher.length === 0) return base
   const tPass = tougher.filter((c) => c.pass).length
   return `${base} · ${tPass}/${tougher.length} tough`
+}
+
+type CardState = {
+  input: string
+  expected: string
+  got?: string
+  error?: string
+  pass?: boolean
+}
+
+function buildCaseCards(
+  rows: { input: string; output: string }[],
+  runResults: RunCaseResult[] | null,
+): CardState[] {
+  return rows.map((row, i) => {
+    const card: CardState = { input: row.input, expected: row.output }
+    const r = runResults?.[i]
+    if (r) {
+      card.got = r.got
+      card.pass = r.pass
+      if (r.error) card.error = r.error
+    }
+    return card
+  })
+}
+
+function fanTransform(i: number, n: number): CSSProperties {
+  const c = i - (n - 1) / 2
+  const spread = Math.min(150, 760 / Math.max(n - 1, 1))
+  const rot = c * Math.min(7, (26 / Math.max(n - 1, 1)) * 2)
+  const lift = Math.abs(c) * Math.abs(c) * 7
+  return {
+    position: 'absolute',
+    left: '50%',
+    bottom: 0,
+    transform: `translateX(calc(-50% + ${c * spread}px)) translateY(${lift}px) rotate(${rot}deg)`,
+    zIndex: 10 + i,
+  }
 }
 
 function LoadingBoard({ query, ingesting }: { query: string; ingesting: boolean }) {
@@ -307,6 +346,7 @@ export default function App() {
   const [stressing, setStressing] = useState(false)
   const [attemptsCollapsed, setAttemptsCollapsed] = useState(false)
   const [sessionSolved, setSessionSolved] = useState(false)
+  const [openStack, setOpenStack] = useState<null | 'examples' | 'tougher'>(null)
   const [vocab, setVocab] = useState<Vocab | null>(null)
   const [fresh, setFresh] = useState<Set<string>>(() => new Set())
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -532,7 +572,6 @@ export default function App() {
   const scaffoldDirty =
     Boolean(sessionId) &&
     normalizeForDirty(code) !== normalizeForDirty(snippetFor(problem, lang))
-  const stressCount = problem?.stressCount ?? 0
   let knownTotal: number | null = null
   for (let i = takes.length - 1; i >= 0; i--) {
     const res = takes[i]!.results
@@ -544,6 +583,19 @@ export default function App() {
   const solved =
     sessionSolved || takes.some(takeAllPass)
 
+  const exampleRows = problem?.examples ?? []
+  const stressRows = problem?.stress ?? []
+  const runOverlay =
+    selectedResults != null && !selectedResults.error
+      ? {
+          official: officialCases(selectedResults),
+          stress: stressCases(selectedResults),
+        }
+      : null
+  const exampleCards = buildCaseCards(exampleRows, runOverlay?.official ?? null)
+  const tougherCards = buildCaseCards(stressRows, runOverlay?.stress ?? null)
+  const fanCards = openStack === 'examples' ? exampleCards : openStack === 'tougher' ? tougherCards : []
+
   function applyFreshSession(res: { sessionId: string; problem: Problem; vocab: Vocab }) {
     setSessionId(res.sessionId)
     setProblem(res.problem)
@@ -553,6 +605,7 @@ export default function App() {
     applyTakes([])
     setSessionSolved(false)
     setAttemptsCollapsed(false)
+    setOpenStack(null)
     setVocab(res.vocab)
     setFresh(new Set())
     const stub = snippetFor(res.problem, lang)
@@ -606,6 +659,7 @@ export default function App() {
       applyTakes(res.takes)
       setSessionSolved(res.solved || res.takes.some(takeAllPass))
       setAttemptsCollapsed(false)
+      setOpenStack(null)
       setVocab(res.vocab)
       setFresh(new Set())
       setInput('')
@@ -730,12 +784,14 @@ export default function App() {
   }
 
   async function chalkUpTougher() {
-    if (!sessionId || stressing || stressCount > 0) return
+    if (!sessionId || stressing || (problem?.stress.length ?? 0) > 0) return
     setStressing(true)
     setError(null)
     try {
-      const { count } = await chalkStress(sessionId)
-      setProblem((p) => (p ? { ...p, stressCount: count } : p))
+      const res = await chalkStress(sessionId)
+      setProblem((p) =>
+        p ? { ...p, stressCount: res.count, stress: res.stress } : p,
+      )
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -808,6 +864,15 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [settingsOpen])
 
+  useEffect(() => {
+    if (!openStack) return
+    function onKey(e: globalThis.KeyboardEvent) {
+      if (e.key === 'Escape') setOpenStack(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [openStack])
+
   const marginMax = clampMarginWidth(
     typeof window !== 'undefined' ? window.innerWidth * 0.5 : marginWidth,
   )
@@ -845,6 +910,7 @@ export default function App() {
             setNotes([])
             applyTakes([])
             setSessionSolved(false)
+            setOpenStack(null)
             setVocab(null)
             setFresh(new Set())
             setInput('')
@@ -1025,19 +1091,6 @@ export default function App() {
                         <span>{running ? 'running…' : 'run'}</span>
                       </button>
                     )}
-                    {sessionId && stressCount === 0 && (
-                      <button
-                        type="button"
-                        className="stressbtn"
-                        disabled={stressing}
-                        onClick={() => void chalkUpTougher()}
-                      >
-                        {stressing ? 'chalking…' : 'chalk up tougher cases'}
-                      </button>
-                    )}
-                    {sessionId && stressCount > 0 && (
-                      <span className="stress-count">{stressCount} tougher</span>
-                    )}
                     <select className="langpick" value={lang} onChange={(e) => changeLang(e.target.value)}>
                       {LANGS.map((l) => (
                         <option key={l} value={l}>
@@ -1121,52 +1174,116 @@ export default function App() {
                     </aside>
                   )}
                 </div>
-                {takes.length > 0 && (
-                  <div className="takes-cases">
-                    {selectedResults == null ? (
-                      <div className="unrun-note">no results yet — run the examples</div>
-                    ) : selectedResults.error ? (
-                      <div className="fail">{selectedResults.error}</div>
-                    ) : (
-                      (() => {
-                        const official = officialCases(selectedResults)
-                        const tougher = stressCases(selectedResults)
-                        const renderRow = (c: RunCaseResult, i: number, stress: boolean) => (
+                <div className="case-stacks">
+                  <button
+                    type="button"
+                    className="case-stack"
+                    onClick={() => setOpenStack('examples')}
+                  >
+                    <span className="stack-card ghost g2" />
+                    <span className="stack-card ghost g1" />
+                    <span className="stack-card top index-card">
+                      <span className="stack-label">examples</span>
+                      <span className="stack-meta">
+                        {(() => {
+                          const passCount = exampleCards.filter((c) => c.pass === true).length
+                          const failCount = exampleCards.filter((c) => c.pass === false).length
+                          if (passCount === 0 && failCount === 0) {
+                            return `${exampleCards.length} cards`
+                          }
+                          return (
+                            <>
+                              {passCount > 0 && <span className="meta-pass">{passCount}✓</span>}
+                              {passCount > 0 && failCount > 0 ? ' ' : null}
+                              {failCount > 0 && <span className="meta-fail">{failCount}✗</span>}
+                            </>
+                          )
+                        })()}
+                      </span>
+                    </span>
+                  </button>
+                  {stressRows.length > 0 ? (
+                    <button
+                      type="button"
+                      className="case-stack"
+                      onClick={() => setOpenStack('tougher')}
+                    >
+                      <span className="stack-card ghost g2" />
+                      <span className="stack-card ghost g1" />
+                      <span className="stack-card top index-card">
+                        <span className="stack-label">tougher</span>
+                        <span className="stack-meta">
+                          {(() => {
+                            const passCount = tougherCards.filter((c) => c.pass === true).length
+                            const failCount = tougherCards.filter((c) => c.pass === false).length
+                            if (passCount === 0 && failCount === 0) {
+                              return `${tougherCards.length} cards`
+                            }
+                            return (
+                              <>
+                                {passCount > 0 && <span className="meta-pass">{passCount}✓</span>}
+                                {passCount > 0 && failCount > 0 ? ' ' : null}
+                                {failCount > 0 && <span className="meta-fail">{failCount}✗</span>}
+                              </>
+                            )
+                          })()}
+                        </span>
+                      </span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="case-stack empty"
+                      disabled={stressing || !sessionId}
+                      onClick={() => void chalkUpTougher()}
+                    >
+                      <span className="stack-card top dashed">
+                        <span className="stack-label">{stressing ? 'chalking…' : 'chalk up'}</span>
+                        <span className="stack-meta">tougher cases</span>
+                      </span>
+                    </button>
+                  )}
+                </div>
+                {selectedResults?.error && (
+                  <div className="run-error">{selectedResults.error}</div>
+                )}
+                {openStack && (
+                  <div
+                    className="fan-backdrop"
+                    onClick={(e) => {
+                      if (e.target === e.currentTarget) setOpenStack(null)
+                    }}
+                  >
+                    <div className="fan-hand">
+                      {fanCards.map((c, i) => (
+                        <div
+                          key={i}
+                          className="fan-slot"
+                          style={{
+                            ...fanTransform(i, fanCards.length),
+                            animationDelay: `${i * 30}ms`,
+                          }}
+                        >
                           <div
-                            key={`${stress ? 's' : 'o'}-${i}`}
-                            className={`${c.pass ? 'pass' : 'fail'}${stress ? ' stress-row' : ''}`}
+                            className={`index-card fan-card${c.pass === true ? ' pass' : c.pass === false ? ' fail' : ''}`}
+                            tabIndex={0}
                           >
-                            <span className="mark">{c.pass ? '✓' : '✗'}</span>
-                            <span className="disp">{c.display}</span>
-                            {!c.pass &&
-                              (c.error ? (
-                                <span className="detail"> → {c.error}</span>
-                              ) : (
-                                <span className="detail">
-                                  {' '}
-                                  → got {c.got} (want {c.expected})
-                                </span>
-                              ))}
+                            <div className="card-head">{c.input}</div>
+                            <div className="card-line">
+                              <span className="card-label">expected</span> {c.expected}
+                            </div>
+                            {c.got !== undefined && (
+                              <div className="card-line got">
+                                <span className="card-label">got</span> {c.got}
+                              </div>
+                            )}
+                            {c.error && <div className="card-line err">{c.error}</div>}
+                            {c.pass === true && <span className="card-stamp ok">✓</span>}
+                            {c.pass === false && <span className="card-stamp no">✗</span>}
                           </div>
-                        )
-                        return (
-                          <>
-                            {official.length > 0 && (
-                              <div className="case-group">
-                                <div className="case-group-label">examples</div>
-                                {official.map((c, i) => renderRow(c, i, false))}
-                              </div>
-                            )}
-                            {tougher.length > 0 && (
-                              <div className="case-group stress-group">
-                                <div className="case-group-label">tougher</div>
-                                {tougher.map((c, i) => renderRow(c, i, true))}
-                              </div>
-                            )}
-                          </>
-                        )
-                      })()
-                    )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </section>

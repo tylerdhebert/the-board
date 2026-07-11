@@ -37,6 +37,8 @@ export function studentSafeProblem(card: ProblemCard): {
   constraints: string;
   difficulty?: string;
   stressCount: number;
+  examples: { input: string; output: string }[];
+  stress: { input: string; output: string }[];
 } {
   return {
     title: card.title,
@@ -44,6 +46,8 @@ export function studentSafeProblem(card: ProblemCard): {
     constraints: card.constraints,
     ...(card.difficulty ? { difficulty: card.difficulty } : {}),
     stressCount: card.stress?.length ?? 0,
+    examples: card.examples,
+    stress: card.stress ?? [],
   };
 }
 

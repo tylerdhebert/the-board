@@ -109,7 +109,10 @@ function vocabFor(entry: SessionEntry): { lockedCount: number; earned: string[] 
 }
 
 /** Per-session in-flight stress generation — concurrent clicks share one promise. */
-const stressInflight = new Map<string, Promise<{ count: number }>>();
+const stressInflight = new Map<
+  string,
+  Promise<{ count: number; stress: { input: string; output: string }[] }>
+>();
 
 const RUNNABLE = new Set(['python', 'typescript', 'javascript', 'csharp']);
 
@@ -503,7 +506,7 @@ async function handle(
     }
     const cached = entry.card.stress;
     if (cached && cached.length > 0) {
-      sendJson(res, 200, { count: cached.length });
+      sendJson(res, 200, { count: cached.length, stress: cached });
       return;
     }
 
@@ -527,7 +530,7 @@ async function handle(
             sibling.card.stress = rows;
             delete sibling.cases;
           }
-          return { count: rows.length };
+          return { count: rows.length, stress: rows };
         } finally {
           stressInflight.delete(sessionId);
         }

@@ -4,14 +4,18 @@ export interface CodeSnippet {
   code: string
 }
 
+export type CaseRow = { input: string; output: string }
+
 export interface Problem {
   title: string
   statement: string
   constraints: string
   difficulty?: string
   codeSnippets?: CodeSnippet[]
-  /** Count of cached tougher cases — never the rows themselves. */
+  /** Count of cached tougher cases. */
   stressCount?: number
+  examples: CaseRow[]
+  stress: CaseRow[]
 }
 
 export type ProblemStatus = 'new' | 'attempted' | 'solved'
@@ -232,8 +236,8 @@ export async function addTake(
 
 export async function chalkStress(
   sessionId: string,
-): Promise<{ count: number }> {
-  return request<{ count: number }>(`/api/session/${sessionId}/stress`, {
+): Promise<{ count: number; stress: CaseRow[] }> {
+  return request<{ count: number; stress: CaseRow[] }>(`/api/session/${sessionId}/stress`, {
     method: 'POST',
     body: JSON.stringify({}),
   })
