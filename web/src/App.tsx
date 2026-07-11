@@ -7,6 +7,7 @@ import {
   type CSSProperties,
   type KeyboardEvent,
   type PointerEvent as ReactPointerEvent,
+  type ReactNode,
 } from 'react'
 import CodeEditor from './CodeEditor'
 import { mdLength, parseMd, renderMd } from './md'
@@ -212,6 +213,100 @@ function blanksAllEmpty(text: string, values: string[]): boolean {
     if ((values[i] ?? '').trim() !== '') return false
   }
   return true
+}
+
+type ScaffoldSeg = { kind: 'prose' | 'code'; text: string }
+
+/** Split scaffold text on ``` fence lines (openers/closers omitted from output). */
+function splitScaffoldFences(text: string): ScaffoldSeg[] {
+  const lines = text.split(/\r?\n/)
+  const segs: ScaffoldSeg[] = []
+  let inCode = false
+  let buf: string[] = []
+
+  const flush = (kind: 'prose' | 'code') => {
+    segs.push({ kind, text: buf.join('\n') })
+    buf = []
+  }
+
+  for (const line of lines) {
+    if (/^```/.test(line)) {
+      flush(inCode ? 'code' : 'prose')
+      inCode = !inCode
+      continue
+    }
+    buf.push(line)
+  }
+  flush(inCode ? 'code' : 'prose')
+  return segs
+}
+
+function renderScaffoldBlankPieces(
+  text: string,
+  startBlank: number,
+  values: string[],
+  disabled: boolean,
+  onChange: (blankIndex: number, value: string) => void,
+): { nodes: ReactNode[]; nextBlank: number } {
+  const parts = text.split(/_{4,}/)
+  const nodes: ReactNode[] = []
+  let blank = startBlank
+  for (let k = 0; k < parts.length; k++) {
+    nodes.push(<Fragment key={`t${k}`}>{parts[k]}</Fragment>)
+    if (k < parts.length - 1) {
+      const idx = blank++
+      nodes.push(
+        <input
+          key={`b${idx}`}
+          className="blank"
+          size={Math.max(6, (values[idx] ?? '').length + 1)}
+          value={values[idx] ?? ''}
+          disabled={disabled}
+          onChange={(e) => onChange(idx, e.target.value)}
+          aria-label={`scaffold blank ${idx + 1}`}
+        />,
+      )
+    }
+  }
+  return { nodes, nextBlank: blank }
+}
+
+function ScaffoldBlankSay({
+  text,
+  values,
+  disabled,
+  onChange,
+}: {
+  text: string
+  values: string[]
+  disabled: boolean
+  onChange: (blankIndex: number, value: string) => void
+}) {
+  const segs = splitScaffoldFences(text)
+  const out: ReactNode[] = []
+  let blank = 0
+  for (let si = 0; si < segs.length; si++) {
+    const seg = segs[si]!
+    const { nodes, nextBlank } = renderScaffoldBlankPieces(
+      seg.text,
+      blank,
+      values,
+      disabled,
+      onChange,
+    )
+    blank = nextBlank
+    if (seg.text === '') continue
+    if (seg.kind === 'code') {
+      out.push(
+        <pre key={si} className="scaffold-code">
+          {nodes}
+        </pre>,
+      )
+    } else {
+      out.push(<Fragment key={si}>{nodes}</Fragment>)
+    }
+  }
+  return <div className="say scaffold-say">{out}</div>
 }
 
 const STAGE_COPY: Record<TurnStage, string> = {
@@ -1587,24 +1682,14 @@ export default function App() {
                   />
                 ) : n.role === 'tutor' && hasScaffoldBlanks(n.mode, n.text) ? (
                   // Scaffold replies are pseudocode-dominant; losing md styling
-                  // on blank-aware notes is an accepted trade.
-                  <div className="say scaffold-say">
-                    {n.text.split(/_{4,}/).map((seg, k, parts) => (
-                      <Fragment key={k}>
-                        {seg}
-                        {k < parts.length - 1 && (
-                          <input
-                            className="blank"
-                            size={Math.max(6, (n.blanks?.[k] ?? '').length + 1)}
-                            value={n.blanks?.[k] ?? ''}
-                            disabled={busy || Boolean(n.sentBack)}
-                            onChange={(e) => setBlankValue(i, k, e.target.value)}
-                            aria-label={`scaffold blank ${k + 1}`}
-                          />
-                        )}
-                      </Fragment>
-                    ))}
-                  </div>
+                  // on blank-aware notes is an accepted trade. Fence-aware:
+                  // ``` lines are stripped; fenced bodies render as mono pre.
+                  <ScaffoldBlankSay
+                    text={n.text}
+                    values={n.blanks ?? []}
+                    disabled={busy || Boolean(n.sentBack)}
+                    onChange={(blankIndex, value) => setBlankValue(i, blankIndex, value)}
+                  />
                 ) : (
                   <p className="say">
                     {n.role === 'tutor' ? (

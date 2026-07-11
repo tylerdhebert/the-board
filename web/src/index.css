@@ -1615,6 +1615,19 @@ body::before {
   opacity: 0.7;
   border-bottom-style: dotted;
 }
+.scaffold-code {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  margin: 10px 0;
+  padding: 10px 12px;
+  background: rgba(16, 26, 21, 0.5);
+  overflow-x: auto;
+}
+.scaffold-code .blank {
+  font-size: 12px;
+}
 .sendback {
   display: inline-block;
   margin-top: 8px;
