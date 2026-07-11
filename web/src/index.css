@@ -1592,6 +1592,44 @@ body::before {
 .review:hover { color: #ffd76a; }
 .review:disabled { color: var(--chalk-faint); cursor: default; }
 
+.scaffold-say {
+  white-space: pre-wrap;
+}
+.scaffold-say .blank {
+  display: inline;
+  vertical-align: baseline;
+  background: transparent;
+  border: 0;
+  border-bottom: 1.5px solid var(--rose);
+  color: var(--chalk);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  padding: 0 2px;
+  outline: none;
+  min-width: 0;
+}
+.scaffold-say .blank:focus {
+  border-bottom-color: var(--amber);
+}
+.scaffold-say .blank:disabled {
+  opacity: 0.7;
+  border-bottom-style: dotted;
+}
+.sendback {
+  display: inline-block;
+  margin-top: 8px;
+  background: transparent;
+  color: var(--amber);
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: lowercase;
+  letter-spacing: 0.06em;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+.sendback:hover { color: #ffd76a; }
+.sendback:disabled { color: var(--chalk-faint); cursor: default; }
+
 /* banner */
 .banner {
   position: absolute; top: 62px; left: 22px; right: 22px; z-index: 5;

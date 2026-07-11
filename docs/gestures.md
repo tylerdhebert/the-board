@@ -90,11 +90,17 @@ brief wiggle/glow — "you're circling a word I'm not saying yet." No index,
 no text, zero leak (the client already knows only the count). Rendered as a
 short CSS animation on the smudge row; respects prefers-reduced-motion.
 
-## Deferred: scaffold blanks (Round D-3)
+## Scaffold blanks (Round D-3 — SHIPPED, not a control line)
 
-Interactive `____` blanks in scaffold-mode replies, rendered as inline
-inputs, "send back" composes the filled version. Waiting until scaffold
-mode proves frequent enough in real use to earn the protocol surface.
+Scaffold-mode replies mark holes with `____` (prompted: 2–6 holes, one
+short fragment each). The client renders scaffold notes containing blanks
+through a blank-aware renderer (plain pre-wrap + inline chalk inputs; such
+notes skip markdown — accepted trade), with a "send it back" button that
+composes the filled scaffold into the next turn (short display label
+"↳ sent the scaffold back", full filled text as hidden payload — the
+review-my-work pattern). Blank values are ephemeral; on resume the holes
+render empty and editable again. No engine/server surface at all — this is
+a rendering convention, not a gesture line.
 
 ## Leak discipline (applies to every gesture)
 

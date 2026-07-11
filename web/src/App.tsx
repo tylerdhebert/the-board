@@ -1,4 +1,5 @@
 import {
+  Fragment,
   useEffect,
   useMemo,
   useRef,
@@ -187,6 +188,30 @@ type Note = {
   revealing?: boolean
   /** Stashed from turn; validated/activated after reveal (ephemeral). */
   gesture?: TeacherGesture
+  /** Ephemeral fill-ins for scaffold ____ holes (not persisted). */
+  blanks?: string[]
+  sentBack?: boolean
+}
+
+function hasScaffoldBlanks(mode: Mode | undefined, text: string): boolean {
+  return mode === 'scaffold' && /_{4,}/.test(text)
+}
+
+function composeFilledScaffold(text: string, values: string[]): string {
+  let i = 0
+  return text.replace(/_{4,}/g, () => {
+    const v = (values[i++] ?? '').trim()
+    return v || '____'
+  })
+}
+
+function blanksAllEmpty(text: string, values: string[]): boolean {
+  const count = text.match(/_{4,}/g)?.length ?? 0
+  if (count === 0) return true
+  for (let i = 0; i < count; i++) {
+    if ((values[i] ?? '').trim() !== '') return false
+  }
+  return true
 }
 
 const STAGE_COPY: Record<TurnStage, string> = {
@@ -847,6 +872,31 @@ export default function App() {
     resetComposerSize()
     const display = notes ? '↳ review my work\n' + notes : '↳ review my work'
     void turn(reviewPrompt(notes), display)
+  }
+
+  function sendScaffoldBack(noteIndex: number) {
+    const note = notes[noteIndex]
+    if (!note || note.sentBack || busy) return
+    if (!hasScaffoldBlanks(note.mode, note.text)) return
+    const values = note.blanks ?? []
+    if (blanksAllEmpty(note.text, values)) return
+    const filled = composeFilledScaffold(note.text, values)
+    setNotes((p) => p.map((n, i) => (i === noteIndex ? { ...n, sentBack: true } : n)))
+    void turn(
+      'Here is your scaffold with my blanks filled in:\n\n' + filled,
+      '↳ sent the scaffold back',
+    )
+  }
+
+  function setBlankValue(noteIndex: number, blankIndex: number, value: string) {
+    setNotes((p) =>
+      p.map((n, i) => {
+        if (i !== noteIndex) return n
+        const blanks = [...(n.blanks ?? [])]
+        blanks[blankIndex] = value
+        return { ...n, blanks }
+      }),
+    )
   }
 
   async function runTheExamples() {
@@ -1535,6 +1585,26 @@ export default function App() {
                     onDone={() => finishReveal(i)}
                     onGrow={scrollNotes}
                   />
+                ) : n.role === 'tutor' && hasScaffoldBlanks(n.mode, n.text) ? (
+                  // Scaffold replies are pseudocode-dominant; losing md styling
+                  // on blank-aware notes is an accepted trade.
+                  <div className="say scaffold-say">
+                    {n.text.split(/_{4,}/).map((seg, k, parts) => (
+                      <Fragment key={k}>
+                        {seg}
+                        {k < parts.length - 1 && (
+                          <input
+                            className="blank"
+                            size={Math.max(6, (n.blanks?.[k] ?? '').length + 1)}
+                            value={n.blanks?.[k] ?? ''}
+                            disabled={busy || Boolean(n.sentBack)}
+                            onChange={(e) => setBlankValue(i, k, e.target.value)}
+                            aria-label={`scaffold blank ${k + 1}`}
+                          />
+                        )}
+                      </Fragment>
+                    ))}
+                  </div>
                 ) : (
                   <p className="say">
                     {n.role === 'tutor' ? (
@@ -1550,6 +1620,16 @@ export default function App() {
                       )
                     })()}
                   </p>
+                )}
+                {hasScaffoldBlanks(n.mode, n.text) && !n.revealing && !n.sentBack && (
+                  <button
+                    type="button"
+                    className="sendback chalk amber"
+                    disabled={busy || blanksAllEmpty(n.text, n.blanks ?? [])}
+                    onClick={() => sendScaffoldBack(i)}
+                  >
+                    send it back
+                  </button>
                 )}
                 {n.gesture?.kind === 'show' && !n.revealing && (() => {
                   const g = n.gesture
