@@ -1,5 +1,7 @@
 appId: board.the.tutor
 productName: The Board
+electronLanguages:
+  - en-US
 directories:
   output: release
   buildResources: build
