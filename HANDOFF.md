@@ -338,9 +338,32 @@ Concise pickup list for the next agent (codex):
    then TAP (vocab smudge wiggle). Also shipped: global 5px flat scrollbars
    (do NOT reintroduce `scrollbar-width` — it overrides webkit styling and
    resurrects native bars).
-9. **Next after gestures:** Round D-3 scaffold blanks (deferred until
-   scaffold mode earns it), provider-check button (maybe), backlog items.
-10. **Conventions:** implementation goes to CLI subagents (implementer =
+9. **Round D COMPLETE (2026-07-11):** SHOW (card copy dealt inline into
+   the tutor's chat note) + TAP (vocab smudge shimmer) shipped on a
+   one-gesture union; scaffold blanks shipped (fence-aware blank renderer,
+   inline chalk inputs, "send it back" composes fills, client-only).
+   `docs/gestures.md` is the protocol contract.
+10. **PACKAGING (2026-07-11): The Board builds as a real Windows exe.**
+   Phase 1: `server/src/appPaths.ts` owns all data locations
+   (TUTOR_DATA_DIR family, explicit envs win, dev defaults identical),
+   seed-card copy, teacher-scratch boot sweep, static serving of
+   TUTOR_WEB_DIST (traversal-guarded, SPA fallback), PORT=0 +
+   `TUTOR_READY {json}` stdout line. Phase 2: esbuild bundles
+   server+engine → `desktop/dist-server/server.cjs`; packaged main spawns
+   it from the app's own exe via ELECTRON_RUN_AS_NODE (Electron 43 =
+   Node 24.18, node:sqlite built in); resources carry web-dist,
+   seed-cards, prompts+schema.json, pyright; packaged TS runs use
+   `--experimental-strip-types` (TUTOR_TS_RUNNER=strip, cwd MUST be the
+   temp runner dir); fonts self-hosted; window-state + CDP debug-gated.
+   Build: `npm run dist` at repo root → `desktop/release/`
+   ("The Board Setup 0.1.0.exe" NSIS per-user + portable, ~100MB).
+   Verified live inside win-unpacked: boot, seeded %APPDATA%/The Board,
+   python 3/3, strip-types TS 3/3. Unsigned, no auto-update (decisions).
+11. **Remaining (Phase 3):** startup doctor panel (probe codex/claude/
+   python/dotnet/csharp-ls, gray out missing features — absorbs the
+   provider-check idea), first-run polish, backlog items (API-client
+   backends, mutation-run support, README refresh).
+12. **Conventions:** implementation goes to CLI subagents (implementer =
    grok-4.5-xhigh via the cli-subagents skill's cursor-subagent.ps1; spec
    in `.agent-tasks/*.md`, short flag-free prompt "read X and implement it
    exactly"); orchestrator writes the spec, reviews the diff, verifies
