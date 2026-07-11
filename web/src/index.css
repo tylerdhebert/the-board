@@ -1442,6 +1442,56 @@ body::before {
   filter: url(#chalk-rough);
 }
 
+/* SHOW — inline index card dealt into the tutor note */
+.note-card-wrap {
+  margin-top: 10px;
+  animation: card-drag-in 350ms ease-out both;
+}
+@keyframes card-drag-in {
+  from {
+    transform: translate(-46px, 10px) rotate(-7deg);
+    opacity: 0;
+  }
+}
+.note-card {
+  width: 200px;
+  min-height: 110px;
+  padding: 6px 12px 10px;
+  transform: rotate(-1.2deg);
+  position: relative;
+  overflow: hidden;
+}
+.note-card.tougher {
+  box-shadow:
+    inset 0 0 0 1.5px rgba(240, 195, 74, 0.45),
+    0 2px 6px rgba(0, 0, 0, 0.35);
+}
+.note-card.fail {
+  box-shadow:
+    inset 0 0 0 2px rgba(180, 69, 58, 0.7),
+    0 2px 6px rgba(0, 0, 0, 0.35);
+}
+.note-card.tougher.fail {
+  box-shadow:
+    inset 0 0 0 2px rgba(180, 69, 58, 0.7),
+    0 2px 6px rgba(0, 0, 0, 0.35);
+}
+.note-card.fail .card-line.got {
+  color: #b4453a;
+}
+
+/* TAP — smudge wiggle */
+.vocab-smear.tapped {
+  animation: smear-wiggle 700ms ease-in-out;
+}
+@keyframes smear-wiggle {
+  0% { transform: rotate(-1.1deg); opacity: 0.5; }
+  25% { transform: rotate(2deg); opacity: 0.85; }
+  50% { transform: rotate(-2deg); opacity: 0.75; }
+  75% { transform: rotate(1.5deg); opacity: 0.85; }
+  100% { transform: rotate(-1.1deg); opacity: 0.5; }
+}
+
 .unlocked {
   margin-top: 8px;
   font-family: var(--mono);
@@ -1565,4 +1615,6 @@ body::before {
   .fan-card { transition: none; }
   .stack-card.top { transition: none; }
   .point-line { animation: none; }
+  .note-card-wrap { animation: none; }
+  .vocab-smear.tapped { animation: none; }
 }

@@ -5,11 +5,16 @@ import { PROMPTS_DIR } from './paths.js';
 import { bullets, fillTemplate, renderTranscript } from './render.js';
 import type { Message, ProblemCard, TutorMode } from './types.js';
 
+export type TeacherGesture =
+  | { kind: 'point'; line: number; quote: string }
+  | { kind: 'show'; caseNumber: number }
+  | { kind: 'tap' };
+
 export interface TeacherReply {
   mode: TutorMode;
   reply: string;
   raw: string;
-  point?: { line: number; quote: string };
+  gesture?: TeacherGesture;
 }
 
 /** Optional per-turn board context for the teacher (cwd + already-rendered lines). */
@@ -19,11 +24,55 @@ export interface TeacherTurnContext {
 }
 
 const POINT_RE = /^POINT:\s*(\d+)\s*\|\s*(.+)$/i;
-const POINT_LOOKS_RE = /^POINT:/i;
+const SHOW_RE = /^SHOW:\s*(?:case\s+)?(\d+)\s*$/i;
+const TAP_RE = /^TAP:\s*(?:vocab)?\s*$/i;
+const GESTURE_LOOKS_RE = /^(POINT|SHOW|TAP):/i;
+
+function parseGestureLine(line: string): TeacherGesture | undefined {
+  const pointMatch = line.match(POINT_RE);
+  if (pointMatch) {
+    const lineNum = Number(pointMatch[1]);
+    const quote = pointMatch[2]!.trim();
+    if (Number.isInteger(lineNum) && lineNum > 0 && quote !== '') {
+      return { kind: 'point', line: lineNum, quote };
+    }
+    return undefined;
+  }
+
+  const showMatch = line.match(SHOW_RE);
+  if (showMatch) {
+    const caseNumber = Number(showMatch[1]);
+    if (Number.isInteger(caseNumber) && caseNumber >= 1) {
+      return { kind: 'show', caseNumber };
+    }
+    return undefined;
+  }
+
+  if (TAP_RE.test(line)) {
+    return { kind: 'tap' };
+  }
+
+  return undefined;
+}
+
+/** Numbered case list for the teacher prompt (officials first, then tougher). */
+export function renderCases(card: ProblemCard): string {
+  const lines: string[] = [];
+  let n = 1;
+  for (const ex of card.examples) {
+    lines.push(`${n}. ${ex.input} -> ${ex.output}`);
+    n++;
+  }
+  for (const ex of card.stress ?? []) {
+    lines.push(`${n}. ${ex.input} -> ${ex.output} (tougher)`);
+    n++;
+  }
+  return lines.length === 0 ? '(none)' : lines.join('\n');
+}
 
 /**
- * Pure parser for teacher raw output: MODE line, optional POINT gesture,
- * then prose. Used by teacherTurn and unit-driven by the parse check.
+ * Pure parser for teacher raw output: MODE line, optional gesture control
+ * line, then prose. Used by teacherTurn and unit-driven by the parse check.
  */
 export function parseTeacherReply(raw: string): TeacherReply {
   const lines = raw.split(/\r?\n/);
@@ -41,15 +90,15 @@ export function parseTeacherReply(raw: string): TeacherReply {
 
   const match = lines[firstNonEmptyIdx]!.match(/^MODE:\s*(socratic|analog|scaffold)\b/i);
   if (!match) {
-    // No MODE — fallback replies stay as-is; do not attempt POINT parsing.
+    // No MODE — fallback replies stay as-is; do not attempt gesture parsing.
     return { mode: 'socratic', reply: raw.trim(), raw };
   }
 
   const mode = match[1]!.toLowerCase() as TutorMode;
   let bodyStart = firstNonEmptyIdx + 1;
-  let point: { line: number; quote: string } | undefined;
+  let gesture: TeacherGesture | undefined;
 
-  // Next non-empty line may be a POINT gesture control line.
+  // Next non-empty line may be ONE gesture control line.
   let nextNonEmptyIdx = -1;
   for (let i = bodyStart; i < lines.length; i++) {
     if (lines[i]!.trim() !== '') {
@@ -58,23 +107,16 @@ export function parseTeacherReply(raw: string): TeacherReply {
     }
   }
 
-  if (nextNonEmptyIdx >= 0 && POINT_LOOKS_RE.test(lines[nextNonEmptyIdx]!)) {
-    const pointMatch = lines[nextNonEmptyIdx]!.match(POINT_RE);
-    if (pointMatch) {
-      const line = Number(pointMatch[1]);
-      const quote = pointMatch[2]!.trim();
-      if (Number.isInteger(line) && line > 0 && quote !== '') {
-        point = { line, quote };
-      }
-    }
+  if (nextNonEmptyIdx >= 0 && GESTURE_LOOKS_RE.test(lines[nextNonEmptyIdx]!)) {
+    gesture = parseGestureLine(lines[nextNonEmptyIdx]!);
     // Strip the control line whether or not it validated — half-formed
-    // POINT lines must never reach the student.
+    // control lines must never reach the student.
     bodyStart = nextNonEmptyIdx + 1;
   }
 
   let reply = lines.slice(bodyStart).join('\n');
   reply = reply.replace(/^\s*\n+/, '');
-  return point ? { mode, reply, raw, point } : { mode, reply, raw };
+  return gesture ? { mode, reply, raw, gesture } : { mode, reply, raw };
 }
 
 export async function teacherTurn(
@@ -110,6 +152,7 @@ export async function teacherTurn(
     ladder: card.ladder.join(' -> '),
     traps,
     leak_terms: bullets(lockedTerms),
+    cases: renderCases(card),
     board_context,
     transcript: renderTranscript(transcript),
     gate_feedback,

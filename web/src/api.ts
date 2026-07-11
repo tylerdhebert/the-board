@@ -83,7 +83,10 @@ export interface TurnResult {
   mode: 'socratic' | 'analog' | 'scaffold'
   unlockedThisTurn: string[]
   redrafted: boolean
-  point?: { line: number; quote: string }
+  gesture?:
+    | { kind: 'point'; line: number; quote: string }
+    | { kind: 'show'; caseNumber: number }
+    | { kind: 'tap' }
 }
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {

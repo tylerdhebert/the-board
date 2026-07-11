@@ -174,6 +174,10 @@ function LoadingBoard({ query, ingesting }: { query: string; ingesting: boolean 
 }
 
 type Mode = 'socratic' | 'analog' | 'scaffold'
+type TeacherGesture =
+  | { kind: 'point'; line: number; quote: string }
+  | { kind: 'show'; caseNumber: number }
+  | { kind: 'tap' }
 type Note = {
   role: 'student' | 'tutor'
   text: string
@@ -181,8 +185,8 @@ type Note = {
   unlocked?: string[]
   redrafted?: boolean
   revealing?: boolean
-  /** Stashed from turn; resolved line after reveal validation (chip only if set). */
-  point?: { line: number; quote: string }
+  /** Stashed from turn; validated/activated after reveal (ephemeral). */
+  gesture?: TeacherGesture
 }
 
 const STAGE_COPY: Record<TurnStage, string> = {
@@ -353,6 +357,7 @@ export default function App() {
   const [vocab, setVocab] = useState<Vocab | null>(null)
   const [fresh, setFresh] = useState<Set<string>>(() => new Set())
   const [point, setPoint] = useState<{ line: number; quote: string } | null>(null)
+  const [tapNonce, setTapNonce] = useState(0)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsModels, setSettingsModels] = useState<AppSettingsModels | null>(null)
   const [settingsBackends, setSettingsBackends] = useState<string[]>([])
@@ -369,6 +374,10 @@ export default function App() {
   codeRef.current = code
   const notesSnapRef = useRef(notes)
   notesSnapRef.current = notes
+  const problemRef = useRef(problem)
+  problemRef.current = problem
+  const vocabRef = useRef(vocab)
+  vocabRef.current = vocab
 
   function refreshProblems() {
     getProblems().then(setProblems).catch(() => {})
@@ -604,11 +613,24 @@ export default function App() {
   const tougherCards = buildCaseCards(stressRows, runOverlay?.stress ?? null)
   const fanCards = openStack === 'examples' ? exampleCards : openStack === 'tougher' ? tougherCards : []
 
+  function showCardAt(caseNumber: number): (CardState & { tougher: boolean }) | null {
+    if (caseNumber < 1) return null
+    if (caseNumber <= exampleCards.length) {
+      const c = exampleCards[caseNumber - 1]
+      return c ? { ...c, tougher: false } : null
+    }
+    const si = caseNumber - 1 - exampleCards.length
+    if (si < 0 || si >= tougherCards.length) return null
+    const c = tougherCards[si]
+    return c ? { ...c, tougher: true } : null
+  }
+
   function applyFreshSession(res: { sessionId: string; problem: Problem; vocab: Vocab }) {
     setSessionId(res.sessionId)
     setProblem(res.problem)
     setNotes([])
     setPoint(null)
+    setTapNonce(0)
     setInput('')
     setError(null)
     applyTakes([])
@@ -672,6 +694,7 @@ export default function App() {
       setVocab(res.vocab)
       setFresh(new Set())
       setPoint(null)
+      setTapNonce(0)
       setInput('')
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -724,7 +747,7 @@ export default function App() {
           unlocked: r.unlockedThisTurn,
           redrafted: r.redrafted,
           revealing: true,
-          ...(r.point ? { point: r.point } : {}),
+          ...(r.gesture ? { gesture: r.gesture } : {}),
         },
       ])
     } catch (err) {
@@ -755,21 +778,36 @@ export default function App() {
   function finishReveal(index: number) {
     const note = notesSnapRef.current[index]
     const unlocked = note?.unlocked
-    const resolved = note?.point ? resolvePoint(note.point, codeRef.current) : null
+    const g = note?.gesture
+    let activated: TeacherGesture | null = null
+    if (g?.kind === 'point') {
+      const resolved = resolvePoint(g, codeRef.current)
+      activated = resolved ? { kind: 'point', ...resolved } : null
+    } else if (g?.kind === 'show') {
+      const p = problemRef.current
+      const total = (p?.examples.length ?? 0) + (p?.stress.length ?? 0)
+      activated = g.caseNumber >= 1 && g.caseNumber <= total ? g : null
+    } else if (g?.kind === 'tap') {
+      const v = vocabRef.current
+      activated = v != null && v.lockedCount > 0 ? g : null
+    }
     setNotes((p) =>
       p.map((n, i) => {
         if (i !== index) return n
         const next: Note = { ...n, revealing: false }
-        if (n.point) {
-          if (resolved) next.point = resolved
-          else delete next.point
+        if (n.gesture) {
+          if (activated) next.gesture = activated
+          else delete next.gesture
         }
         return next
       }),
     )
-    if (note?.point) {
+    if (g?.kind === 'point') {
       // Activate after reveal (or clear if validation dropped it / replace prior).
-      setPoint(resolved)
+      setPoint(activated?.kind === 'point' ? { line: activated.line, quote: activated.quote } : null)
+    }
+    if (activated?.kind === 'tap') {
+      setTapNonce((n) => n + 1)
     }
     if (!unlocked?.length || !vocab) return
     const already = new Set(vocab.earned)
@@ -956,6 +994,7 @@ export default function App() {
             setProblem(null)
             setNotes([])
             setPoint(null)
+            setTapNonce(0)
             applyTakes([])
             setSessionSolved(false)
             setOpenStack(null)
@@ -1093,7 +1132,15 @@ export default function App() {
                           <span key={t} className={`vocab-word${fresh.has(t) ? ' fresh' : ''}`}>{t}</span>
                         ))}
                         {Array.from({ length: vocab.lockedCount }, (_, i) => (
-                          <span key={`s${i}`} className="vocab-smear" style={{ width: smearWidth(i) }} aria-hidden="true" />
+                          <span
+                            key={`s${i}-${tapNonce}`}
+                            className={`vocab-smear${tapNonce > 0 ? ' tapped' : ''}`}
+                            style={{
+                              width: smearWidth(i),
+                              ...(tapNonce > 0 ? { animationDelay: `${i * 40}ms` } : {}),
+                            }}
+                            aria-hidden="true"
+                          />
                         ))}
                       </div>
                     </div>
@@ -1478,8 +1525,8 @@ export default function App() {
                   <span>{n.role === 'tutor' ? 'tutor' : 'you'}</span>
                   {n.mode && <span className={`badge ${n.mode}`}>{n.mode}</span>}
                   {n.redrafted && <span className="badge revised">reworded</span>}
-                  {n.point && !n.revealing && (
-                    <span className="badge point">↳ line {n.point.line}</span>
+                  {n.gesture?.kind === 'point' && !n.revealing && (
+                    <span className="badge point">↳ line {n.gesture.line}</span>
                   )}
                 </div>
                 {n.revealing ? (
@@ -1504,6 +1551,34 @@ export default function App() {
                     })()}
                   </p>
                 )}
+                {n.gesture?.kind === 'show' && !n.revealing && (() => {
+                  const g = n.gesture
+                  if (g?.kind !== 'show') return null
+                  const c = showCardAt(g.caseNumber)
+                  if (!c) return null
+                  return (
+                    <div className="note-card-wrap">
+                      <div
+                        className={`index-card note-card${c.tougher ? ' tougher' : ''}${
+                          c.pass === true ? ' pass' : c.pass === false ? ' fail' : ''
+                        }`}
+                      >
+                        <div className="card-head">{c.input}</div>
+                        <div className="card-line">
+                          <span className="card-label">expected</span> {c.expected}
+                        </div>
+                        {c.got !== undefined && (
+                          <div className="card-line got">
+                            <span className="card-label">got</span> {c.got}
+                          </div>
+                        )}
+                        {c.error && <div className="card-line err">{c.error}</div>}
+                        {c.pass === true && <span className="card-stamp ok">✓</span>}
+                        {c.pass === false && <span className="card-stamp no">✗</span>}
+                      </div>
+                    </div>
+                  )
+                })()}
                 {!n.revealing && n.unlocked && n.unlocked.length > 0 && (
                   <p className="unlocked">
                     <b>✓ you've got it:</b> {n.unlocked.join(' · ')}

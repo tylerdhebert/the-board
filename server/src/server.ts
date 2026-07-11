@@ -679,7 +679,7 @@ async function handle(
         mode: result.mode,
         unlockedThisTurn: result.unlockedThisTurn,
         redrafted: result.redrafted,
-        point: result.point,
+        gesture: result.gesture,
       });
       res.end();
       try {

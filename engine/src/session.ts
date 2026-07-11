@@ -1,7 +1,7 @@
 import { gateCheck } from './gate.js';
 import type { LLMClient } from './llm.js';
 import { createClient } from './providers.js';
-import { teacherTurn, type TeacherTurnContext } from './teacher.js';
+import { teacherTurn, type TeacherGesture, type TeacherTurnContext } from './teacher.js';
 import { NullTracer, TracingLLMClient, type Tracer } from './trace.js';
 import type { GateVerdict, Message, ProblemCard, TutorMode } from './types.js';
 import { judgeUnlock } from './unlockJudge.js';
@@ -11,13 +11,15 @@ export interface SessionModels { teacher: RoleConfig; gate: RoleConfig; unlock: 
 
 export type TurnStage = 'unlock' | 'draft' | 'gate' | 'redraft';
 
+export type { TeacherGesture };
+
 export interface TurnResult {
   mode: TutorMode;
   reply: string;
   gate: GateVerdict;
   redrafted: boolean;
   unlockedThisTurn: string[];
-  point?: { line: number; quote: string };
+  gesture?: TeacherGesture;
 }
 
 /** Optional board context for the teacher only (cwd + rendered BOARD lines). */
@@ -39,6 +41,15 @@ export function shouldJudgeUnlock(studentMessage: string, lockedTerms: string[])
     }
   }
   return false;
+}
+
+function showCaseInput(card: ProblemCard, caseNumber: number): string {
+  const examples = card.examples;
+  if (caseNumber <= examples.length) {
+    return examples[caseNumber - 1]!.input;
+  }
+  const stress = card.stress ?? [];
+  return stress[caseNumber - 1 - examples.length]!.input;
 }
 
 export class TutorSession {
@@ -90,6 +101,33 @@ export class TutorSession {
     return this.turnCounter;
   }
 
+  /** Drop out-of-range SHOW / empty-board TAP before gate + result. */
+  private acceptGesture(gesture: TeacherGesture | undefined): TeacherGesture | undefined {
+    if (!gesture) return undefined;
+    if (gesture.kind === 'show') {
+      const total = this.card.examples.length + (this.card.stress?.length ?? 0);
+      if (gesture.caseNumber < 1 || gesture.caseNumber > total) return undefined;
+      return gesture;
+    }
+    if (gesture.kind === 'tap') {
+      if (this._lockedTerms.length === 0) return undefined;
+      return gesture;
+    }
+    return gesture;
+  }
+
+  private gateDraft(reply: string, gesture: TeacherGesture | undefined): string {
+    if (!gesture) return reply;
+    if (gesture.kind === 'point') {
+      return reply + `\n\n[gesture: points at editor line ${gesture.line}: \`${gesture.quote}\`]`;
+    }
+    if (gesture.kind === 'show') {
+      const input = showCaseInput(this.card, gesture.caseNumber);
+      return reply + `\n\n[gesture: shows the class case ${gesture.caseNumber}: \`${input}\`]`;
+    }
+    return reply + `\n\n[gesture: taps the vocab board without revealing anything]`;
+  }
+
   async submit(
     studentMessage: string,
     onStage?: (stage: TurnStage) => void,
@@ -127,13 +165,11 @@ export class TutorSession {
       undefined,
       turnContext,
     );
+    t = { ...t, gesture: this.acceptGesture(t.gesture) };
     onStage?.('gate');
-    const gateDraft = (reply: typeof t) =>
-      reply.point
-        ? reply.reply + `\n\n[gesture: points at editor line ${reply.point.line}: \`${reply.point.quote}\`]`
-        : reply.reply;
     let verdict = await gateCheck(
-      this.gateClient, this.card, t.mode, studentMessage, gateDraft(t), this._lockedTerms, this.models.gate.model,
+      this.gateClient, this.card, t.mode, studentMessage,
+      this.gateDraft(t.reply, t.gesture), this._lockedTerms, this.models.gate.model,
     );
     let redrafted = false;
 
@@ -144,9 +180,11 @@ export class TutorSession {
         { rejectedDraft: t.reply, note: verdict.note },
         turnContext,
       );
+      t = { ...t, gesture: this.acceptGesture(t.gesture) };
       onStage?.('gate');
       verdict = await gateCheck(
-        this.gateClient, this.card, t.mode, studentMessage, gateDraft(t), this._lockedTerms, this.models.gate.model,
+        this.gateClient, this.card, t.mode, studentMessage,
+        this.gateDraft(t.reply, t.gesture), this._lockedTerms, this.models.gate.model,
       );
       redrafted = true;
     }
@@ -172,7 +210,7 @@ export class TutorSession {
       gate: verdict,
       redrafted,
       unlockedThisTurn,
-      ...(t.point ? { point: t.point } : {}),
+      ...(t.gesture ? { gesture: t.gesture } : {}),
     };
   }
 }
