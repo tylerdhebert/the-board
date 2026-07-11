@@ -80,7 +80,8 @@ ingest; cards cache in `cards/` (seeded from `seed-cards/`).
 | `prototype/` | The original bash harness + transcripts that proved the concept. |
 
 `DESIGN.md` has the architecture and validation findings; `HANDOFF.md` is the
-living state doc.
+living state doc; [`docs/warts.md`](docs/warts.md) is the honest list of known
+debts.
 
 ## The rules the product keeps
 
