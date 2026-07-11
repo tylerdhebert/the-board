@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { completeJson, killTree, type LLMClient } from './llm.js';
 import { PROMPTS_DIR } from './paths.js';
-import type { Example, ProblemCard } from './types.js';
+import type { Example, Judge, ProblemCard } from './types.js';
 
 const ORACLE_TIMEOUT_MS = 5_000;
 const KILL_GRACE_MS = 5_000;
@@ -105,16 +105,23 @@ else:
   return parsed.name;
 }
 
-function buildOracleScript(code: string, entrypoint: string, callSrc: string): string {
+function buildOracleScript(
+  code: string,
+  entrypoint: string,
+  callSrc: string,
+  judge?: Judge,
+): string {
   const codeJson = JSON.stringify(JSON.stringify(code));
   const entryJson = JSON.stringify(entrypoint);
   const callJson = JSON.stringify(JSON.stringify(callSrc));
+  const judgeJson = JSON.stringify(JSON.stringify(judge ?? null));
   return `
 import ast, json, sys
 
 code = json.loads(${codeJson})
 entrypoint = ${entryJson}
 call_src = json.loads(${callJson})
+judge = json.loads(${judgeJson})
 
 def fail(msg):
     print(json.dumps({"ok": False, "error": msg}))
@@ -158,15 +165,38 @@ else:
     fail(f"could not find {entrypoint}")
 
 try:
-    got = entry(*args)
+    ret = entry(*args)
 except Exception as e:
     fail(f"raised: {e}")
 
-try:
-    out = repr(got)
-    ast.literal_eval(out)
-except Exception as e:
-    fail(f"output is not a Python literal: {e}")
+if judge is None:
+    got = ret
+    try:
+        out = repr(got)
+        ast.literal_eval(out)
+    except Exception as e:
+        fail(f"output is not a Python literal: {e}")
+elif judge["kind"] == "in-place":
+    got = args[int(judge["argIndex"])]
+    try:
+        out = repr(got)
+        ast.literal_eval(out)
+    except Exception as e:
+        fail(f"output is not a Python literal: {e}")
+elif judge["kind"] == "k-prefix":
+    idx = int(judge["argIndex"])
+    k = ret
+    arr = args[idx]
+    if not isinstance(k, int) or k < 0 or k > len(arr):
+        fail(f"k out of range: {k!r}")
+    prefix = arr[:k]
+    # Pad with _ past k so extractCases round-trips the official shape.
+    padded = list(prefix) + ["_"] * (len(arr) - k)
+    # Use a placeholder name; extractCases only needs "k, name = [...]".
+    out = f"{k}, nums = [{', '.join('_' if x == '_' else repr(x) for x in padded)}]"
+    got = {"k": k, "prefix": prefix}
+else:
+    fail(f"unknown judge kind: {judge!r}")
 
 try:
     json.dumps(got)
@@ -181,8 +211,9 @@ async function oracleOne(
   code: string,
   entrypoint: string,
   callSrc: string,
+  judge?: Judge,
 ): Promise<OracleResult> {
-  const script = buildOracleScript(code, entrypoint, callSrc);
+  const script = buildOracleScript(code, entrypoint, callSrc, judge);
   try {
     const { stdout, stderr, code: exitCode, timedOut } = await runPythonScript(
       script,
@@ -278,7 +309,7 @@ export async function generateStressCases(
 
   const rows: Example[] = [];
   for (const input of unique) {
-    const result = await oracleOne(card.optimal.code, entrypoint, input);
+    const result = await oracleOne(card.optimal.code, entrypoint, input, card.judge);
     if (!result.ok) continue;
     rows.push({ input, output: result.output });
   }

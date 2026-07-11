@@ -1,3 +1,5 @@
+import type { Example, Judge } from './types.js';
+
 export interface CodeSnippet {
   lang: string; // display name, e.g. "C#"
   langSlug: string; // e.g. "csharp", "typescript", "python3"
@@ -11,6 +13,8 @@ export interface LeetCodeProblem {
   contentHtml: string; // raw HTML from LeetCode
   statement: string; // plain-text, ready to feed to ingest()
   codeSnippets: CodeSnippet[]; // per-language starter scaffolds
+  /** Raw JSON string from LeetCode GraphQL; used to detect judge. */
+  metaData?: string;
 }
 
 export function slugFromUrl(input: string): string {
@@ -50,6 +54,61 @@ export function htmlToText(html: string): string {
   return text.trim();
 }
 
+type MetaParam = { name?: string; type?: string };
+type MetaData = {
+  name?: string;
+  params?: MetaParam[];
+  return?: { type?: string };
+};
+
+function parseMetaData(raw: string | null | undefined): MetaData | null {
+  if (raw == null || typeof raw !== 'string' || !raw.trim()) return null;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+    return parsed as MetaData;
+  } catch {
+    return null;
+  }
+}
+
+function firstArrayArgIndex(params: MetaParam[] | undefined): number {
+  if (!params?.length) return 0;
+  const idx = params.findIndex((p) => typeof p.type === 'string' && p.type.endsWith('[]'));
+  return idx >= 0 ? idx : 0;
+}
+
+const K_PREFIX_OUTPUT = /^\s*\d+\s*,\s*\w+\s*=\s*\[/;
+
+/**
+ * Detect mutation/k-prefix grading from LeetCode metaData (+ examples for k-prefix).
+ * Missing/unparseable metaData ⇒ undefined (return-value grading).
+ */
+export function detectJudge(
+  metaDataRaw: string | null | undefined,
+  examples?: Example[],
+): Judge | undefined {
+  const meta = parseMetaData(metaDataRaw);
+  if (!meta) return undefined;
+  const returnType = meta.return?.type;
+  const params = meta.params ?? [];
+  const argIndex = firstArrayArgIndex(params);
+  const hasArrayParam = params.some((p) => typeof p.type === 'string' && p.type.endsWith('[]'));
+
+  if (returnType === 'void') {
+    return { kind: 'in-place', argIndex };
+  }
+
+  if (returnType === 'integer' && hasArrayParam) {
+    const outs = examples ?? [];
+    if (outs.some((ex) => typeof ex.output === 'string' && K_PREFIX_OUTPUT.test(ex.output))) {
+      return { kind: 'k-prefix', argIndex };
+    }
+  }
+
+  return undefined;
+}
+
 export async function fetchProblem(input: string): Promise<LeetCodeProblem> {
   const slug = slugFromUrl(input);
   const res = await fetch('https://leetcode.com/graphql', {
@@ -61,7 +120,7 @@ export async function fetchProblem(input: string): Promise<LeetCodeProblem> {
     },
     body: JSON.stringify({
       query:
-        'query q($titleSlug: String!){ question(titleSlug:$titleSlug){ title titleSlug difficulty content codeSnippets { lang langSlug code } } }',
+        'query q($titleSlug: String!){ question(titleSlug:$titleSlug){ title titleSlug difficulty content metaData codeSnippets { lang langSlug code } } }',
       variables: { titleSlug: slug },
     }),
   });
@@ -75,6 +134,7 @@ export async function fetchProblem(input: string): Promise<LeetCodeProblem> {
         titleSlug: string;
         difficulty: string;
         content: string;
+        metaData?: string | null;
         codeSnippets: CodeSnippet[] | null;
       };
     };
@@ -85,6 +145,10 @@ export async function fetchProblem(input: string): Promise<LeetCodeProblem> {
   }
   const statement =
     `PROBLEM: ${question.title} (${question.difficulty})\n\n` + htmlToText(question.content);
+  const metaData =
+    typeof question.metaData === 'string' && question.metaData.trim()
+      ? question.metaData
+      : undefined;
   return {
     title: question.title,
     slug: question.titleSlug,
@@ -92,5 +156,6 @@ export async function fetchProblem(input: string): Promise<LeetCodeProblem> {
     contentHtml: question.content,
     statement,
     codeSnippets: question.codeSnippets ?? [],
+    ...(metaData ? { metaData } : {}),
   };
 }

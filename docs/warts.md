@@ -21,10 +21,13 @@ touches the product's soul.
    context re-fed. 15–40s per nudge. See "turn latency" below for the
    no-API-pricing mitigation paths.
 
-4. **Mutation/in-place problems don't grade.** Rotate Array et al. end in
-   "got nothing back — did you return the result?" *Path:* LeetCode
-   `metaData` (function signature) is already fetched — detect void-return +
-   mutated-arg problems at ingest and compare the mutated argument.
+4. **Mutation grading is young and heuristic.** In-place (void-return) and
+   "return k + first k elements" problems now grade via a `judge` detected
+   from LeetCode `metaData` at ingest (2026-07-11). What remains: cards
+   cached before the change carry no `judge` until re-ingested; k-prefix
+   detection depends on the card LLM preserving the `2, nums = [1,2,_]`
+   example shape; in-place comparison is strictly ordered (right for every
+   known void problem, but there is no per-problem override).
 
 5. **The statement is a lossy retelling.** Ingest lets the card LLM re-emit
    the problem statement, and it paraphrases enough that you end up back on

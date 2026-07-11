@@ -2,8 +2,9 @@ import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { completeJson, type LLMClient } from './llm.js';
+import { detectJudge } from './leetcode.js';
 import { PROMPTS_DIR, SCHEMA_PATH } from './paths.js';
-import type { ProblemCard } from './types.js';
+import type { Judge, ProblemCard } from './types.js';
 
 export interface VerificationResult {
   ok: boolean;
@@ -33,11 +34,13 @@ function buildVerifyScript(card: ProblemCard): string {
   // reinterpret escape sequences inside a JSON string).
   const codeJson = JSON.stringify(JSON.stringify(card.optimal.code));
   const examplesJson = JSON.stringify(JSON.stringify(card.examples));
+  const judgeJson = JSON.stringify(JSON.stringify(card.judge ?? null));
   return `
-import ast, json, sys
+import ast, json, sys, re
 
 code = json.loads(${codeJson})
 examples = json.loads(${examplesJson})
+judge = json.loads(${judgeJson})
 
 ns = {}
 try:
@@ -46,13 +49,51 @@ except Exception as e:
     print(json.dumps({"cases": [], "error": str(e)}))
     sys.exit(0)
 
+def bind_entry(call_name):
+    if "Solution" in ns:
+        return getattr(ns["Solution"](), call_name)
+    if call_name in ns:
+        return ns[call_name]
+    raise NameError(f"could not find {call_name}")
+
+def parse_k_prefix(out):
+    m = re.match(r"^\\s*(\\d+)\\s*,\\s*\\w+\\s*=\\s*(\\[.*)\\s*$", out, re.DOTALL)
+    if not m:
+        raise ValueError(f"not a k-prefix output: {out!r}")
+    k = int(m.group(1))
+    raw_list = ast.literal_eval(m.group(2).replace("_", "None"))
+    prefix = [x for x in raw_list if x is not None]
+    return {"k": k, "prefix": prefix}
+
 cases = []
 for ex in examples:
     inp = ex["input"]
     out = ex["output"]
-    got = eval(inp, ns)
-    expected = ast.literal_eval(out)
-    if got == expected or (isinstance(got, list) and isinstance(expected, list) and sorted(got) == sorted(expected)):
+    if judge is None:
+        got = eval(inp, ns)
+        expected = ast.literal_eval(out)
+    else:
+        tree = ast.parse(inp, mode="eval")
+        if not isinstance(tree.body, ast.Call):
+            raise ValueError(f"example input is not a call: {inp!r}")
+        call = tree.body
+        if not isinstance(call.func, ast.Name):
+            raise ValueError(f"example call is not a bare name: {inp!r}")
+        args = [ast.literal_eval(a) for a in call.args]
+        entry = bind_entry(call.func.id)
+        ret = entry(*args)
+        idx = int(judge["argIndex"])
+        if judge["kind"] == "in-place":
+            got = args[idx]
+            expected = ast.literal_eval(out)
+        elif judge["kind"] == "k-prefix":
+            got = {"k": ret, "prefix": args[idx][:ret]}
+            expected = parse_k_prefix(out)
+        else:
+            raise ValueError(f"unknown judge kind: {judge!r}")
+    if judge is not None and judge.get("kind") == "in-place":
+        passed = got == expected
+    elif got == expected or (isinstance(got, list) and isinstance(expected, list) and sorted(got) == sorted(expected)):
         passed = True
     else:
         passed = False
@@ -185,8 +226,11 @@ export async function ingest(
   client: LLMClient,
   statement: string,
   model: string,
+  opts?: { metaData?: string; judge?: Judge },
 ): Promise<IngestResult> {
   const card = await generateCard(client, statement, model);
+  const judge = opts?.judge ?? detectJudge(opts?.metaData, card.examples);
+  if (judge) card.judge = judge;
   const verification = await verifyCard(card);
   return { card, verification };
 }

@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { killTree } from './llm.js';
+import type { Judge } from './types.js';
 
 export type CaseSpec = {
   display: string;
@@ -14,12 +15,27 @@ const EXTRACT_TIMEOUT_MS = 10_000;
 // anyway (a kill-race orphan can hold the stdio pipes open forever).
 const KILL_GRACE_MS = 5_000;
 
-function buildExtractScript(examples: { input: string; output: string }[]): string {
+function buildExtractScript(
+  examples: { input: string; output: string }[],
+  judge?: Judge,
+): string {
   const examplesJson = JSON.stringify(JSON.stringify(examples));
+  const judgeJson = JSON.stringify(JSON.stringify(judge ?? null));
   return `
-import ast, json, sys
+import ast, json, sys, re
 
 examples = json.loads(${examplesJson})
+judge = json.loads(${judgeJson})
+
+def parse_k_prefix(out):
+    m = re.match(r"^\\s*(\\d+)\\s*,\\s*\\w+\\s*=\\s*(\\[.*)\\s*$", out, re.DOTALL)
+    if not m:
+        raise ValueError(f"not a k-prefix output: {out!r}")
+    k = int(m.group(1))
+    raw_list = ast.literal_eval(m.group(2).replace("_", "None"))
+    prefix = [x for x in raw_list if x is not None]
+    return {"k": k, "prefix": prefix}
+
 out = []
 for ex in examples:
     inp = ex["input"]
@@ -33,7 +49,10 @@ for ex in examples:
         sys.exit(0)
     try:
         args = [ast.literal_eval(a) for a in tree.body.args]
-        expected = ast.literal_eval(ex["output"])
+        if judge is not None and judge.get("kind") == "k-prefix":
+            expected = parse_k_prefix(ex["output"])
+        else:
+            expected = ast.literal_eval(ex["output"])
     except Exception as e:
         print(json.dumps({"error": f"failed to eval example {inp!r}: {e}"}))
         sys.exit(0)
@@ -44,9 +63,9 @@ print(json.dumps(out))
 
 export async function extractCases(
   examples: { input: string; output: string }[],
-  opts?: { stress?: boolean },
+  opts?: { stress?: boolean; judge?: Judge },
 ): Promise<CaseSpec[]> {
-  const script = buildExtractScript(examples);
+  const script = buildExtractScript(examples, opts?.judge);
 
   const { stdout, stderr, code, timedOut } = await new Promise<{
     stdout: string;

@@ -329,11 +329,12 @@ async function getOrRestore(id: string): Promise<SessionEntry | null> {
 
 async function ensureCases(entry: SessionEntry): Promise<CaseSpec[]> {
   if (entry.cases) return entry.cases;
-  const official = await extractCases(entry.card.examples, { stress: false });
+  const judge = entry.card.judge;
+  const official = await extractCases(entry.card.examples, { stress: false, judge });
   const stressRows = entry.card.stress ?? [];
   const stress =
     stressRows.length > 0
-      ? await extractCases(stressRows, { stress: true })
+      ? await extractCases(stressRows, { stress: true, judge })
       : [];
   entry.cases = [...official, ...stress];
   return entry.cases;
@@ -705,6 +706,7 @@ async function handle(
         language as 'python' | 'typescript' | 'javascript' | 'csharp',
         cases,
         scaffold,
+        entry.card.judge,
       );
       const newest = entry.persisted.takes[entry.persisted.takes.length - 1];
       if (

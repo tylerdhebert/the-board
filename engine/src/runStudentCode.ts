@@ -5,6 +5,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { CaseSpec } from './exampleCases.js';
 import { killTree } from './llm.js';
+import type { Judge } from './types.js';
 
 export type RunCaseResult = {
   display: string;
@@ -107,7 +108,37 @@ function deepEqual(a: unknown, b: unknown): boolean {
   return false;
 }
 
-function compareGot(got: unknown, expected: unknown): boolean {
+/** Strict ordered equality — no any-order fallback at any nesting level. */
+function strictDeepEqual(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  if (typeof a !== typeof b) return false;
+  if (a === null || b === null) return a === b;
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    return a.every((v, i) => strictDeepEqual(v, b[i]));
+  }
+  if (typeof a === 'object' && typeof b === 'object') {
+    const ao = a as Record<string, unknown>;
+    const bo = b as Record<string, unknown>;
+    const ak = Object.keys(ao);
+    const bk = Object.keys(bo);
+    if (ak.length !== bk.length) return false;
+    return ak.every((k) => strictDeepEqual(ao[k], bo[k]));
+  }
+  return false;
+}
+
+function compareGot(got: unknown, expected: unknown, judge?: Judge): boolean {
+  if (judge?.kind === 'in-place') {
+    return strictDeepEqual(got, expected);
+  }
+  if (judge?.kind === 'k-prefix') {
+    const g = got as { k?: unknown; prefix?: unknown } | null;
+    const e = expected as { k?: unknown; prefix?: unknown } | null;
+    if (!g || !e || typeof g !== 'object' || typeof e !== 'object') return false;
+    if (g.k !== e.k) return false;
+    return deepEqual(g.prefix, e.prefix);
+  }
   return deepEqual(got, expected);
 }
 
@@ -197,7 +228,7 @@ function parseHarness(stdout: string, stderr: string, timedOut: boolean, timeout
   }
 }
 
-function toRunResult(cases: CaseSpec[], payload: HarnessPayload): StudentRunResult {
+function toRunResult(cases: CaseSpec[], payload: HarnessPayload, judge?: Judge): StudentRunResult {
   if ('fatal' in payload) {
     return { cases: [], error: payload.fatal };
   }
@@ -226,7 +257,8 @@ function toRunResult(cases: CaseSpec[], payload: HarnessPayload): StudentRunResu
         ...stressMark,
       };
     }
-    if ((r.got === null || r.got === undefined) && c.expected !== null) {
+    // Judged (in-place / k-prefix) cases extract got from args; null return is fine.
+    if (!judge && (r.got === null || r.got === undefined) && c.expected !== null) {
       return {
         display: c.display,
         expected: expectedStr,
@@ -237,7 +269,7 @@ function toRunResult(cases: CaseSpec[], payload: HarnessPayload): StudentRunResu
         ...stressMark,
       };
     }
-    const pass = compareGot(r.got, c.expected);
+    const pass = compareGot(r.got, c.expected, judge);
     return {
       display: c.display,
       expected: expectedStr,
@@ -249,16 +281,18 @@ function toRunResult(cases: CaseSpec[], payload: HarnessPayload): StudentRunResu
   return { cases: out };
 }
 
-function buildPythonHarness(code: string, entry: string, cases: CaseSpec[]): string {
+function buildPythonHarness(code: string, entry: string, cases: CaseSpec[], judge?: Judge): string {
   const codeJson = JSON.stringify(JSON.stringify(code));
   const casesJson = JSON.stringify(JSON.stringify(cases.map((c) => c.args)));
   const entryJson = JSON.stringify(entry);
+  const judgeJson = JSON.stringify(JSON.stringify(judge ?? null));
   return `
 import json, sys
 
 code = json.loads(${codeJson})
 cases = json.loads(${casesJson})
 name = ${entryJson}
+judge = json.loads(${judgeJson})
 
 ns = {}
 try:
@@ -282,7 +316,22 @@ else:
 results = []
 for args in cases:
     try:
-        got = entry(*args)
+        ret = entry(*args)
+        if judge is None:
+            got = ret
+        elif judge["kind"] == "in-place":
+            got = args[int(judge["argIndex"])]
+        elif judge["kind"] == "k-prefix":
+            idx = int(judge["argIndex"])
+            k = ret
+            arr = args[idx]
+            if not isinstance(k, int) or k < 0 or k > len(arr):
+                results.append({"got": None, "error": f"k out of range: {k!r}"})
+                continue
+            got = {"k": k, "prefix": arr[:k]}
+        else:
+            results.append({"got": None, "error": f"unknown judge kind: {judge!r}"})
+            continue
         results.append({"got": got, "error": None})
     except Exception as e:
         results.append({"got": None, "error": str(e)})
@@ -291,18 +340,40 @@ print(json.dumps({"results": results}))
 `.trimStart();
 }
 
-function buildTsHarness(code: string, entry: string, cases: CaseSpec[], language: 'typescript' | 'javascript'): string {
+function buildTsHarness(
+  code: string,
+  entry: string,
+  cases: CaseSpec[],
+  language: 'typescript' | 'javascript',
+  judge?: Judge,
+): string {
   const casesJson = JSON.stringify(cases.map((c) => c.args));
+  const judgeJson = JSON.stringify(judge ?? null);
   // Student code first; trailer calls the detected entry point.
   const trailer = `
 
 ;(() => {
   const __cases: unknown[][] = ${casesJson};
+  const __judge: { kind: string; argIndex: number } | null = ${judgeJson};
   const __fn: (...args: unknown[]) => unknown = ${entry} as any;
   const __results: { got: unknown; error: string | null }[] = [];
   for (const __args of __cases) {
     try {
-      const __got = __fn(...__args);
+      const __ret = __fn(...__args);
+      let __got: unknown = __ret;
+      if (__judge != null) {
+        if (__judge.kind === 'in-place') {
+          __got = __args[__judge.argIndex];
+        } else if (__judge.kind === 'k-prefix') {
+          const __arr = __args[__judge.argIndex] as unknown[];
+          const __k = __ret as number;
+          if (typeof __k !== 'number' || __k < 0 || __k > __arr.length) {
+            __results.push({ got: null, error: \`k out of range: \${JSON.stringify(__k)}\` });
+            continue;
+          }
+          __got = { k: __k, prefix: __arr.slice(0, __k) };
+        }
+      }
       __results.push({ got: __got, error: null });
     } catch (__e) {
       __results.push({ got: null, error: __e instanceof Error ? __e.message : String(__e) });
@@ -316,9 +387,11 @@ function buildTsHarness(code: string, entry: string, cases: CaseSpec[], language
   return code + trailer;
 }
 
-function buildCsharpProgram(code: string, entry: string, casesPath: string): string {
+function buildCsharpProgram(code: string, entry: string, casesPath: string, judge?: Judge): string {
   // Student code may already declare Solution; harness is a separate static class with Main.
   const casesPathLit = JSON.stringify(casesPath);
+  const judgeKind = judge?.kind ?? null;
+  const judgeArgIndex = judge?.argIndex ?? 0;
   return `${code}
 
 static class __StudentHarness {
@@ -327,6 +400,8 @@ static class __StudentHarness {
       var casesJson = System.IO.File.ReadAllText(${casesPathLit});
       using var casesDoc = System.Text.Json.JsonDocument.Parse(casesJson);
       var methodName = ${JSON.stringify(entry)};
+      string judgeKind = ${JSON.stringify(judgeKind)};
+      var judgeArgIndex = ${judgeArgIndex};
       var solutionType = typeof(Solution);
       var method = solutionType.GetMethod(methodName,
         System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.IgnoreCase)
@@ -346,7 +421,24 @@ static class __StudentHarness {
             var pType = parameters[i].ParameterType;
             args[i] = System.Text.Json.JsonSerializer.Deserialize(raw.GetRawText(), pType);
           }
-          var got = method.Invoke(instance, args);
+          var ret = method.Invoke(instance, args);
+          object got = ret;
+          if (judgeKind == "in-place") {
+            got = args[judgeArgIndex];
+          } else if (judgeKind == "k-prefix") {
+            var arr = args[judgeArgIndex] as System.Array;
+            if (arr == null) {
+              results.Add(new { got = (object)null, error = "k-prefix arg is not an array" });
+              continue;
+            }
+            if (ret is not int k || k < 0 || k > arr.Length) {
+              results.Add(new { got = (object)null, error = $"k out of range: {ret}" });
+              continue;
+            }
+            var prefix = new object[k];
+            for (var i = 0; i < k; i++) prefix[i] = arr.GetValue(i);
+            got = new { k, prefix };
+          }
           results.Add(new { got, error = (string)null });
         } catch (Exception e) {
           var msg = e is System.Reflection.TargetInvocationException tie && tie.InnerException != null
@@ -370,14 +462,19 @@ async function ensureCsharpScratch(): Promise<void> {
   await writeFile(join(scratch, 'run.csproj'), CSPROJ, 'utf8');
 }
 
-async function runPython(code: string, entry: string, cases: CaseSpec[]): Promise<StudentRunResult> {
-  const script = buildPythonHarness(code, entry, cases);
+async function runPython(
+  code: string,
+  entry: string,
+  cases: CaseSpec[],
+  judge?: Judge,
+): Promise<StudentRunResult> {
+  const script = buildPythonHarness(code, entry, cases, judge);
   const { stdout, stderr, timedOut } = await runChild('python', ['-'], {
     env: { ...process.env, PYTHONUTF8: '1' },
     stdin: script,
     timeoutMs: PYTHON_TIMEOUT_MS,
   });
-  return toRunResult(cases, parseHarness(stdout, stderr, timedOut, PYTHON_TIMEOUT_MS));
+  return toRunResult(cases, parseHarness(stdout, stderr, timedOut, PYTHON_TIMEOUT_MS), judge);
 }
 
 async function runTsJs(
@@ -385,11 +482,12 @@ async function runTsJs(
   entry: string,
   cases: CaseSpec[],
   language: 'typescript' | 'javascript',
+  judge?: Judge,
 ): Promise<StudentRunResult> {
   const dir = await mkdtemp(join(tmpdir(), 'tutor-run-'));
   try {
     const runner = join(dir, 'runner.ts');
-    await writeFile(runner, buildTsHarness(code, entry, cases, language), 'utf8');
+    await writeFile(runner, buildTsHarness(code, entry, cases, language, judge), 'utf8');
     const strip = process.env.TUTOR_TS_RUNNER === 'strip';
     const args = strip
       ? ['--no-warnings', '--experimental-strip-types', runner]
@@ -402,19 +500,24 @@ async function runTsJs(
       env,
       timeoutMs: TS_TIMEOUT_MS,
     });
-    return toRunResult(cases, parseHarness(stdout, stderr, timedOut, TS_TIMEOUT_MS));
+    return toRunResult(cases, parseHarness(stdout, stderr, timedOut, TS_TIMEOUT_MS), judge);
   } finally {
     await rm(dir, { recursive: true, force: true }).catch(() => {});
   }
 }
 
-async function runCsharp(code: string, entry: string, cases: CaseSpec[]): Promise<StudentRunResult> {
+async function runCsharp(
+  code: string,
+  entry: string,
+  cases: CaseSpec[],
+  judge?: Judge,
+): Promise<StudentRunResult> {
   await ensureCsharpScratch();
   const scratch = csharpScratch();
   const programPath = join(scratch, 'Program.cs');
   const casesPath = join(scratch, 'cases.json');
   await writeFile(casesPath, JSON.stringify(cases.map((c) => c.args)), 'utf8');
-  await writeFile(programPath, buildCsharpProgram(code, entry, casesPath), 'utf8');
+  await writeFile(programPath, buildCsharpProgram(code, entry, casesPath, judge), 'utf8');
 
   const { stdout, stderr, timedOut, code: exitCode } = await runChild(
     'dotnet',
@@ -430,7 +533,7 @@ async function runCsharp(code: string, entry: string, cases: CaseSpec[]): Promis
   if (line) {
     try {
       const payload = JSON.parse(line) as HarnessPayload;
-      return toRunResult(cases, payload);
+      return toRunResult(cases, payload, judge);
     } catch {
       // fall through to stderr fatal
     }
@@ -442,7 +545,7 @@ async function runCsharp(code: string, entry: string, cases: CaseSpec[]): Promis
     return { cases: [], error: errLines || `dotnet exited with code ${exitCode}` };
   }
 
-  return toRunResult(cases, parseHarness(stdout, stderr, false, CSHARP_TIMEOUT_MS));
+  return toRunResult(cases, parseHarness(stdout, stderr, false, CSHARP_TIMEOUT_MS), judge);
 }
 
 export async function runStudentCode(
@@ -450,6 +553,7 @@ export async function runStudentCode(
   language: RunnableLang,
   cases: CaseSpec[],
   scaffold?: string,
+  judge?: Judge,
 ): Promise<StudentRunResult> {
   const entry = detectEntryPoint(code, language, scaffold);
   if (!entry) {
@@ -457,11 +561,11 @@ export async function runStudentCode(
   }
 
   try {
-    if (language === 'python') return await runPython(code, entry, cases);
+    if (language === 'python') return await runPython(code, entry, cases, judge);
     if (language === 'typescript' || language === 'javascript') {
-      return await runTsJs(code, entry, cases, language);
+      return await runTsJs(code, entry, cases, language, judge);
     }
-    return await runCsharp(code, entry, cases);
+    return await runCsharp(code, entry, cases, judge);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return { cases: [], error: message };

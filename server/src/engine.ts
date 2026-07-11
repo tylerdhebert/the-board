@@ -114,7 +114,9 @@ export async function getOrIngestCard(
 
   const model = opts?.model ?? 'gpt-5.5';
   const client = opts?.client ?? createClient('codex');
-  const { card, verification } = await ingest(client, problem.statement, model);
+  const { card, verification } = await ingest(client, problem.statement, model, {
+    metaData: problem.metaData,
+  });
   card.difficulty = problem.difficulty;
   await writeFile(cachePath, JSON.stringify(card, null, 2) + '\n', 'utf8');
   await writeFile(snippetsPath, JSON.stringify(problem.codeSnippets, null, 2) + '\n', 'utf8');
