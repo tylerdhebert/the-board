@@ -1179,7 +1179,7 @@ body::before {
 }
 .fan-slot:hover .fan-card,
 .fan-slot:focus-within .fan-card {
-  transform: translateY(-26px) scale(1.06);
+  transform: translateY(-26px) scale(1.06) rotate(calc(var(--fan-rot, 0deg) * -1));
   box-shadow: 0 10px 22px rgba(0, 0, 0, 0.45);
 }
 .card-head {

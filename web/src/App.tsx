@@ -132,7 +132,8 @@ function fanTransform(i: number, n: number): CSSProperties {
     bottom: 0,
     transform: `translateX(calc(-50% + ${c * spread}px)) translateY(${lift}px) rotate(${rot}deg)`,
     zIndex: 10 + i,
-  }
+    ['--fan-rot' as string]: `${rot}deg`,
+  } as CSSProperties
 }
 
 function LoadingBoard({ query, ingesting }: { query: string; ingesting: boolean }) {
