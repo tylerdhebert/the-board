@@ -1,4 +1,6 @@
 desktop/.window-state.json
+desktop/dist-server/
+desktop/release/
 node_modules/
 dist/
 .codex-subagents/

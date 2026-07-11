@@ -18,12 +18,13 @@ const CSPROJ = `<Project Sdk="Microsoft.NET.Sdk">
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SERVER_ROOT = path.resolve(__dirname, '..');
-const PYRIGHT_LANGSERVER = path.join(
-  SERVER_ROOT,
-  'node_modules',
-  'pyright',
-  'langserver.index.js',
-);
+
+function pyrightLangserver(): string {
+  if (process.env.TUTOR_PYRIGHT_PATH) {
+    return path.resolve(process.env.TUTOR_PYRIGHT_PATH);
+  }
+  return path.join(SERVER_ROOT, 'node_modules', 'pyright', 'langserver.index.js');
+}
 
 type LangId = 'csharp' | 'python';
 
@@ -62,8 +63,9 @@ const LSP_LANGS: Record<LangId, LangConfig> = {
       );
     },
     spawn: (cwd) =>
-      spawn(process.execPath, [PYRIGHT_LANGSERVER, '--stdio'], {
+      spawn(process.execPath, [pyrightLangserver(), '--stdio'], {
         cwd,
+        env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
         stdio: ['pipe', 'pipe', 'pipe'],
         windowsHide: true,
       }),

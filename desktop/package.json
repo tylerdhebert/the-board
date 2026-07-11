@@ -1,9 +1,18 @@
 {
-  "name": "desktop",
+  "name": "the-board-desktop",
+  "productName": "The Board",
+  "version": "0.1.0",
+  "description": "The Board — a Socratic coding tutor",
+  "author": "Tyler",
   "private": true,
   "type": "module",
   "main": "main.mjs",
+  "scripts": {
+    "dist": "node scripts/build-server.mjs && electron-builder"
+  },
   "devDependencies": {
-    "electron": "^43.0.0"
+    "electron": "^43.0.0",
+    "electron-builder": "^26.0.0",
+    "esbuild": "^0.25.0"
   }
 }

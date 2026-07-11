@@ -390,10 +390,16 @@ async function runTsJs(
   try {
     const runner = join(dir, 'runner.ts');
     await writeFile(runner, buildTsHarness(code, entry, cases, language), 'utf8');
-    // Prefer the local tsx CLI via node (avoids Windows npx.cmd spawn issues).
-    const tsxCli = join(SERVER_DIR, 'node_modules', 'tsx', 'dist', 'cli.mjs');
-    const { stdout, stderr, timedOut } = await runChild(process.execPath, [tsxCli, runner], {
-      cwd: SERVER_DIR,
+    const strip = process.env.TUTOR_TS_RUNNER === 'strip';
+    const args = strip
+      ? ['--no-warnings', '--experimental-strip-types', runner]
+      : [join(SERVER_DIR, 'node_modules', 'tsx', 'dist', 'cli.mjs'), runner];
+    const env = strip
+      ? { ...process.env, ELECTRON_RUN_AS_NODE: '1', NODE_OPTIONS: '' }
+      : undefined;
+    const { stdout, stderr, timedOut } = await runChild(process.execPath, args, {
+      cwd: strip ? dir : SERVER_DIR,
+      env,
       timeoutMs: TS_TIMEOUT_MS,
     });
     return toRunResult(cases, parseHarness(stdout, stderr, timedOut, TS_TIMEOUT_MS));

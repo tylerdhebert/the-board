@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "node dev.mjs",
     "desktop": "node dev.mjs --desktop",
-    "setup": "npm install --prefix engine && npm install --prefix server && npm install --prefix web && npm install --prefix desktop"
+    "setup": "npm install --prefix engine && npm install --prefix server && npm install --prefix web && npm install --prefix desktop",
+    "dist": "cd web && npx vite build && cd ../desktop && npm run dist"
   }
 }
