@@ -69,5 +69,31 @@
       "output": "False"
     }
   ],
-  "difficulty": "Easy"
+  "difficulty": "Easy",
+  "stress": [
+    {
+      "input": "is_valid_parentheses(']')",
+      "output": "False"
+    },
+    {
+      "input": "is_valid_parentheses('(')",
+      "output": "False"
+    },
+    {
+      "input": "is_valid_parentheses('(((())))')",
+      "output": "True"
+    },
+    {
+      "input": "is_valid_parentheses('({[]})[]{}')",
+      "output": "True"
+    },
+    {
+      "input": "is_valid_parentheses('(((((((((())))))))))(')",
+      "output": "False"
+    },
+    {
+      "input": "is_valid_parentheses('({[}])')",
+      "output": "False"
+    }
+  ]
 }

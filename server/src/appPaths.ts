@@ -15,7 +15,7 @@ export type AppPaths = {
   runScratchDir: string; // scratchDir/.run-scratch
   lspScratchDir: string; // scratchDir/.lsp-scratch (+ '-py' sibling derived where used)
   webDistDir: string | null; // TUTOR_WEB_DIST > null (null = no static serving)
-  seedCardsDir: string | null; // TUTOR_SEED_CARDS > null
+  seedCardsDir: string; // TUTOR_SEED_CARDS > <repo>/seed-cards
 };
 
 export function appPaths(): AppPaths {
@@ -58,7 +58,7 @@ export function appPaths(): AppPaths {
 
   const seedCardsDir = process.env.TUTOR_SEED_CARDS
     ? path.resolve(process.env.TUTOR_SEED_CARDS)
-    : null;
+    : path.join(repoRoot, 'seed-cards');
 
   return {
     dataDir,

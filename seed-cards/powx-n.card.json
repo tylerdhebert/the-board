@@ -1,0 +1,74 @@
+{
+  "title": "Pow(x, n)",
+  "statement": "Implement pow(x, n), which calculates x raised to the power n (i.e., x^n).\n\nExample 1:\nInput: x = 2.00000, n = 10\nOutput: 1024.00000\n\nExample 2:\nInput: x = 2.10000, n = 3\nOutput: 9.26100\n\nExample 3:\nInput: x = 2.00000, n = -2\nOutput: 0.25000\nExplanation: 2^-2 = 1 / 2^2 = 1/4 = 0.25",
+  "constraints": "-100.0 < x < 100.0\n-2^31 <= n <= 2^31 - 1\nn is an integer.\nEither x is not zero or n > 0.\n-10^4 <= x^n <= 10^4",
+  "brute_force": {
+    "approach": "Handle a negative exponent by computing the reciprocal of the positive-power result. Then multiply by x repeatedly |n| times, starting from 1. This directly follows the definition of exponentiation and is correct, but it does one multiplication for every unit of the exponent's magnitude.",
+    "time": "O(|n|)",
+    "space": "O(1)"
+  },
+  "optimal": {
+    "approach": "Convert a negative exponent into a reciprocal problem, then compute the positive exponent by repeatedly using the fact that powers can be built from squared bases. At each step, if the current exponent is odd, include the current base in the answer; then square the base and halve the exponent until no exponent remains.",
+    "language": "python",
+    "code": "def my_pow(x: float, n: int) -> float:\n    if n == 0:\n        return 1.0\n\n    exponent = n\n    base = x\n\n    if exponent < 0:\n        base = 1.0 / base\n        exponent = -exponent\n\n    result = 1.0\n    while exponent > 0:\n        if exponent % 2 == 1:\n            result *= base\n        base *= base\n        exponent //= 2\n\n    return result\n\n\n# Optional LeetCode-style wrapper\nclass Solution:\n    def myPow(self, x: float, n: int) -> float:\n        return my_pow(x, n)\n",
+    "time": "O(log |n|)",
+    "space": "O(1)"
+  },
+  "key_insight": "Instead of multiplying by x one exponent at a time, you can reuse squared powers because x^n can be reduced by halving the exponent and squaring the base.",
+  "ladder": [
+    "restate exponentiation",
+    "direct repeated multiplication",
+    "negative exponent handling",
+    "cost of one-by-one multiplication",
+    "notice paired factors",
+    "halve the exponent",
+    "accumulate odd leftover factors"
+  ],
+  "traps": [
+    {
+      "wrong_approach": "Multiplying x by itself n times without handling negative n.",
+      "why_wrong": "A negative exponent means reciprocal of a positive power, not a negative number of multiplications.",
+      "counterexample": "x = 2.0, n = -2 should return 0.25, not 1.0 or an error."
+    },
+    {
+      "wrong_approach": "Using the language's built-in power operator or math.pow as the implementation.",
+      "why_wrong": "The task is to implement the power calculation itself, so delegating to a built-in power function bypasses the intended problem.",
+      "counterexample": "x = 2.0, n = 10 can be answered by pow, but that does not demonstrate an implementation."
+    },
+    {
+      "wrong_approach": "Only squaring the base and halving the exponent, without multiplying the answer when the exponent is odd.",
+      "why_wrong": "Odd exponents have one unpaired factor that must be included before halving.",
+      "counterexample": "x = 2.0, n = 3 should return 8.0; blindly squaring to 4 and halving loses one factor of 2."
+    },
+    {
+      "wrong_approach": "Trying to compute negative powers with integer division or by rounding intermediate values.",
+      "why_wrong": "The result is a floating-point value, and reciprocal powers often require fractional results.",
+      "counterexample": "x = 2.0, n = -2 should return 0.25; integer-style division could produce 0."
+    }
+  ],
+  "leak_terms": [
+    "exponentiation by squaring",
+    "binary exponentiation",
+    "fast power",
+    "square the base and halve the exponent",
+    "reuse squared powers",
+    "accumulate the current base when the exponent is odd",
+    "logarithmic exponentiation"
+  ],
+  "underlying_primitive": "Reducing repeated work by grouping identical multiplications into larger reusable chunks.",
+  "examples": [
+    {
+      "input": "my_pow(2.0, 10)",
+      "output": "1024.0"
+    },
+    {
+      "input": "my_pow(2.1, 3)",
+      "output": "9.261000000000001"
+    },
+    {
+      "input": "my_pow(2.0, -2)",
+      "output": "0.25"
+    }
+  ],
+  "difficulty": "Medium"
+}

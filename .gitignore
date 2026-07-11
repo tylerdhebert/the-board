@@ -18,3 +18,5 @@ sessions.migrated/
 tutor.db
 tutor.db-wal
 tutor.db-shm
+
+cards/

@@ -90,7 +90,6 @@ async function pruneEmptySessions(): Promise<void> {
 }
 
 async function seedCardsIfNeeded(): Promise<void> {
-  if (!paths.seedCardsDir) return;
   let empty = false;
   try {
     const entries = await readdir(paths.cardsDir);
@@ -99,13 +98,19 @@ async function seedCardsIfNeeded(): Promise<void> {
     empty = true;
   }
   if (!empty) return;
+  let seeds: string[];
+  try {
+    seeds = await readdir(paths.seedCardsDir);
+  } catch {
+    // Seed dir missing — skip silently (resolve exists-check at use site).
+    return;
+  }
   await mkdir(paths.cardsDir, { recursive: true });
-  const seeds = await readdir(paths.seedCardsDir);
   await Promise.all(
     seeds
       .filter((name) => name.endsWith('.card.json') || name.endsWith('.snippets.json'))
       .map((name) =>
-        cp(path.join(paths.seedCardsDir!, name), path.join(paths.cardsDir, name)),
+        cp(path.join(paths.seedCardsDir, name), path.join(paths.cardsDir, name)),
       ),
   );
 }
