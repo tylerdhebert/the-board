@@ -2,6 +2,7 @@ import { Fragment, createElement, type ChangeEvent, type CSSProperties, type Rea
 import type { PersistedTake, Problem, ProblemSummary, RunCaseResult, StudentRunResult } from './api'
 import { DESK_MIN_PX, LANG_SLUG, MARGIN_MIN_PX, MARGIN_WIDTH_KEY } from './appConstants'
 import type { CardState, Mode, ScaffoldSeg } from './appTypes'
+import { parseMd, renderMd } from './md'
 
 export function snippetFor(problem: Problem | null, lang: string): string {
   const slug = LANG_SLUG[lang] ?? lang
@@ -136,12 +137,15 @@ export function renderScaffoldBlankPieces(
   values: string[],
   disabled: boolean,
   onChange: (blankIndex: number, value: string) => void,
+  markdown = false,
 ): { nodes: ReactNode[]; nextBlank: number } {
   const parts = text.split(/_{4,}/)
   const nodes: ReactNode[] = []
   let blank = startBlank
   for (let k = 0; k < parts.length; k++) {
-    nodes.push(createElement(Fragment, { key: `t${k}` }, parts[k]))
+    // Prose keeps its markdown (bold / `code`); code segments stay literal.
+    const content = markdown ? renderMd(parseMd(parts[k]!)) : parts[k]
+    nodes.push(createElement(Fragment, { key: `t${k}` }, content))
     if (k < parts.length - 1) {
       const idx = blank++
       nodes.push(

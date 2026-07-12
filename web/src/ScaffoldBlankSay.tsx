@@ -23,6 +23,7 @@ export default function ScaffoldBlankSay({
       values,
       disabled,
       onChange,
+      seg.kind === 'prose',
     )
     blank = nextBlank
     if (seg.text === '') continue
