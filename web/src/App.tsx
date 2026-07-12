@@ -1,16 +1,12 @@
 import {
-  Fragment,
   useEffect,
-  useMemo,
   useRef,
   useState,
-  type CSSProperties,
   type KeyboardEvent,
   type PointerEvent as ReactPointerEvent,
-  type ReactNode,
 } from 'react'
 import CodeEditor from './CodeEditor'
-import { mdLength, parseMd, renderMd, type MdFigure } from './md'
+import { parseMd, renderMd, type MdFigure } from './md'
 import {
   addTake,
   chalkStress,
@@ -27,428 +23,46 @@ import {
   type PersistedTake,
   type Problem,
   type ProblemSummary,
-  type RunCaseResult,
-  type StudentRunResult,
   type TurnStage,
   type Vocab,
 } from './api'
+import {
+  COMPOSER_AUTO_MAX_PX,
+  COMPOSER_MANUAL_MAX_PX,
+  COMPOSER_MIN_PX,
+  LANGS,
+  MARGIN_MIN_PX,
+  RUNNABLE,
+  STAGE_COPY,
+} from './appConstants'
+import {
+  blanksAllEmpty,
+  buildCaseCards,
+  clampMarginWidth,
+  composeFilledScaffold,
+  difficultyClass,
+  hasScaffoldBlanks,
+  normalizeForDirty,
+  officialCases,
+  persistMarginWidth,
+  readStoredMarginWidth,
+  reviewPrompt,
+  snippetFor,
+  stressCases,
+  takeAllPass,
+  takeScoreLabel,
+} from './appHelpers'
+import type { CardState, Mode, Note, TeacherGesture } from './appTypes'
+import FanOverlay from './FanOverlay'
+import HeroLedger from './HeroLedger'
+import LoadingBoard from './LoadingBoard'
+import RevealingText from './RevealingText'
+import ScaffoldBlankSay from './ScaffoldBlankSay'
+import SettingsPanel from './SettingsPanel'
+import VocabBoard from './VocabBoard'
 import WindowControls from './WindowControls'
 
-const LANGS = ['csharp', 'typescript', 'python', 'javascript'] as const
-const RUNNABLE = new Set(['python', 'typescript', 'javascript', 'csharp'])
-
-// Monaco language id -> LeetCode langSlug (for picking the starter scaffold).
-const LANG_SLUG: Record<string, string> = {
-  csharp: 'csharp',
-  typescript: 'typescript',
-  python: 'python3',
-  javascript: 'javascript',
-  java: 'java',
-  cpp: 'cpp',
-  go: 'golang',
-}
-
-function snippetFor(problem: Problem | null, lang: string): string {
-  const slug = LANG_SLUG[lang] ?? lang
-  return problem?.codeSnippets?.find((s) => s.langSlug === slug)?.code ?? ''
-}
-
-/** Right-trim every line, drop trailing blank lines. Indentation still counts. */
-export function normalizeForDirty(code: string): string {
-  return code
-    .split('\n')
-    .map((l) => l.replace(/\s+$/, ''))
-    .join('\n')
-    .replace(/\n+$/, '')
-}
-
-function difficultyClass(d: string): string {
-  const lower = d.toLowerCase()
-  if (lower === 'easy') return 'easy'
-  if (lower === 'medium') return 'medium'
-  if (lower === 'hard') return 'hard'
-  return 'medium'
-}
-
-function officialCases(res: StudentRunResult): RunCaseResult[] {
-  return res.cases.filter((c) => !c.stress)
-}
-
-function stressCases(res: StudentRunResult): RunCaseResult[] {
-  return res.cases.filter((c) => c.stress)
-}
-
-function takeAllPass(t: PersistedTake): boolean {
-  const res = t.results
-  if (res == null || res.error) return false
-  const official = officialCases(res)
-  return official.length > 0 && official.every((c) => c.pass)
-}
-
-function takeScoreLabel(t: PersistedTake, knownTotal: number | null): string {
-  const res = t.results
-  if (res == null || res.error) {
-    return knownTotal == null ? '–/–' : `–/${knownTotal}`
-  }
-  const official = officialCases(res)
-  const tougher = stressCases(res)
-  const oPass = official.filter((c) => c.pass).length
-  const base = `${oPass}/${official.length}`
-  if (tougher.length === 0) return base
-  const tPass = tougher.filter((c) => c.pass).length
-  return `${base} · ${tPass}/${tougher.length} tough`
-}
-
-type CardState = {
-  input: string
-  expected: string
-  got?: string
-  error?: string
-  pass?: boolean
-}
-
-function buildCaseCards(
-  rows: { input: string; output: string }[],
-  runResults: RunCaseResult[] | null,
-): CardState[] {
-  return rows.map((row, i) => {
-    const card: CardState = { input: row.input, expected: row.output }
-    const r = runResults?.[i]
-    if (r) {
-      card.got = r.got
-      card.pass = r.pass
-      if (r.error) card.error = r.error
-    }
-    return card
-  })
-}
-
-function fanTransform(i: number, n: number): CSSProperties {
-  const c = i - (n - 1) / 2
-  const spread = Math.min(215, 1000 / Math.max(n - 1, 1))
-  const rot = c * Math.min(7, (26 / Math.max(n - 1, 1)) * 2)
-  const lift = Math.abs(c) * Math.abs(c) * 7
-  return {
-    position: 'absolute',
-    left: '50%',
-    bottom: 0,
-    transform: `translateX(calc(-50% + ${c * spread}px)) translateY(${lift}px) rotate(${rot}deg)`,
-    zIndex: 10 + i,
-    ['--fan-rot' as string]: `${rot}deg`,
-  } as CSSProperties
-}
-
-function LoadingBoard({ query, ingesting }: { query: string; ingesting: boolean }) {
-  const steps = ingesting
-    ? [
-        `finding “${query}” on the board…`,
-        'reading the problem…',
-        'working it out myself first — so I never mislead you…',
-        'checking my solution against the examples…',
-        'almost ready…',
-      ]
-    : ['pulling it up…']
-  const [i, setI] = useState(0)
-  useEffect(() => {
-    setI(0)
-    if (!ingesting) return
-    const t = setInterval(() => setI((v) => (v + 1 < steps.length ? v + 1 : v)), 6500)
-    return () => clearInterval(t)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ingesting, query])
-  return (
-    <div className="loadingboard">
-      <svg className="chalk-spin" viewBox="0 0 80 80" width="76" height="76" aria-hidden="true">
-        <g className="spin-ring">
-          <circle cx="40" cy="40" r="31" fill="none" stroke="#f0c34a" strokeWidth="2.4" strokeDasharray="17 13" filter="url(#chalk-rough)" />
-        </g>
-        <text x="40" y="52" textAnchor="middle" fontFamily="Bricolage Grotesque, sans-serif" fontWeight="800" fontSize="30" fill="#ece6d6">Σ</text>
-      </svg>
-      <p className="load-step">{steps[i]}</p>
-      {ingesting && (
-        <p className="load-note">
-          first time for this one — fetching it and working it through takes about 30–60s. after
-          this it’s cached and instant.
-        </p>
-      )}
-    </div>
-  )
-}
-
-type Mode = 'socratic' | 'analog' | 'scaffold'
-type TeacherGesture =
-  | { kind: 'point'; line: number; quote: string }
-  | { kind: 'show'; caseNumber: number }
-  | { kind: 'tap' }
-type Note = {
-  role: 'student' | 'tutor'
-  text: string
-  mode?: Mode
-  unlocked?: string[]
-  redrafted?: boolean
-  revealing?: boolean
-  /** Stashed from turn; validated/activated after reveal (ephemeral). */
-  gesture?: TeacherGesture
-  /** Ephemeral fill-ins for scaffold ____ holes (not persisted). */
-  blanks?: string[]
-  sentBack?: boolean
-}
-
-function hasScaffoldBlanks(mode: Mode | undefined, text: string): boolean {
-  return mode === 'scaffold' && /_{4,}/.test(text)
-}
-
-function composeFilledScaffold(text: string, values: string[]): string {
-  let i = 0
-  return text.replace(/_{4,}/g, () => {
-    const v = (values[i++] ?? '').trim()
-    return v || '____'
-  })
-}
-
-function blanksAllEmpty(text: string, values: string[]): boolean {
-  const count = text.match(/_{4,}/g)?.length ?? 0
-  if (count === 0) return true
-  for (let i = 0; i < count; i++) {
-    if ((values[i] ?? '').trim() !== '') return false
-  }
-  return true
-}
-
-type ScaffoldSeg = { kind: 'prose' | 'code'; text: string }
-
-/** Split scaffold text on ``` fence lines (openers/closers omitted from output). */
-function splitScaffoldFences(text: string): ScaffoldSeg[] {
-  const lines = text.split(/\r?\n/)
-  const segs: ScaffoldSeg[] = []
-  let inCode = false
-  let buf: string[] = []
-
-  const flush = (kind: 'prose' | 'code') => {
-    segs.push({ kind, text: buf.join('\n') })
-    buf = []
-  }
-
-  for (const line of lines) {
-    if (/^```/.test(line)) {
-      flush(inCode ? 'code' : 'prose')
-      inCode = !inCode
-      continue
-    }
-    buf.push(line)
-  }
-  flush(inCode ? 'code' : 'prose')
-  return segs
-}
-
-function renderScaffoldBlankPieces(
-  text: string,
-  startBlank: number,
-  values: string[],
-  disabled: boolean,
-  onChange: (blankIndex: number, value: string) => void,
-): { nodes: ReactNode[]; nextBlank: number } {
-  const parts = text.split(/_{4,}/)
-  const nodes: ReactNode[] = []
-  let blank = startBlank
-  for (let k = 0; k < parts.length; k++) {
-    nodes.push(<Fragment key={`t${k}`}>{parts[k]}</Fragment>)
-    if (k < parts.length - 1) {
-      const idx = blank++
-      nodes.push(
-        <input
-          key={`b${idx}`}
-          className="blank"
-          size={Math.max(6, (values[idx] ?? '').length + 1)}
-          value={values[idx] ?? ''}
-          disabled={disabled}
-          onChange={(e) => onChange(idx, e.target.value)}
-          aria-label={`scaffold blank ${idx + 1}`}
-        />,
-      )
-    }
-  }
-  return { nodes, nextBlank: blank }
-}
-
-function ScaffoldBlankSay({
-  text,
-  values,
-  disabled,
-  onChange,
-}: {
-  text: string
-  values: string[]
-  disabled: boolean
-  onChange: (blankIndex: number, value: string) => void
-}) {
-  const segs = splitScaffoldFences(text)
-  const out: ReactNode[] = []
-  let blank = 0
-  for (let si = 0; si < segs.length; si++) {
-    const seg = segs[si]!
-    const { nodes, nextBlank } = renderScaffoldBlankPieces(
-      seg.text,
-      blank,
-      values,
-      disabled,
-      onChange,
-    )
-    blank = nextBlank
-    if (seg.text === '') continue
-    if (seg.kind === 'code') {
-      out.push(
-        <pre key={si} className="scaffold-code">
-          {nodes}
-        </pre>,
-      )
-    } else {
-      out.push(<Fragment key={si}>{nodes}</Fragment>)
-    }
-  }
-  return <div className="say scaffold-say">{out}</div>
-}
-
-const STAGE_COPY: Record<TurnStage, string> = {
-  unlock: "checking what you've earned…",
-  draft: 'thinking about your move…',
-  gate: "making sure i'm not giving it away…",
-  redraft: 'rewording — i almost said too much…',
-}
-
-function RevealingText({
-  text,
-  onDone,
-  onGrow,
-}: {
-  text: string
-  onDone: () => void
-  onGrow: () => void
-}) {
-  const [n, setN] = useState(0)
-  const doneRef = useRef(false)
-  const onDoneRef = useRef(onDone)
-  const onGrowRef = useRef(onGrow)
-  onDoneRef.current = onDone
-  onGrowRef.current = onGrow
-
-  // Reveal budget runs over parsed segments (markdown markers excluded), so
-  // code/bold style in as they appear instead of raw backticks popping.
-  const segs = useMemo(() => parseMd(text), [text])
-  const total = useMemo(() => mdLength(segs), [segs])
-
-  useEffect(() => {
-    const t = setInterval(() => {
-      setN((v) => {
-        if (v >= total) return v
-        return Math.min(v + 3, total)
-      })
-    }, 16)
-    return () => clearInterval(t)
-  }, [total])
-
-  useEffect(() => {
-    onGrowRef.current()
-    if (n >= total && !doneRef.current) {
-      doneRef.current = true
-      onDoneRef.current()
-    }
-  }, [n, total])
-
-  function finish() {
-    if (doneRef.current) return
-    setN(total)
-  }
-
-  const done = n >= total
-  return (
-    <p className="say" onClick={finish} style={done ? undefined : { cursor: 'pointer' }}>
-      {renderMd(segs, n)}
-      {!done && <span className="caret">▌</span>}
-    </p>
-  )
-}
-
-const MARGIN_WIDTH_KEY = 'the-board:margin-width'
-const MARGIN_MIN_PX = 240
-const DESK_MIN_PX = 420
-const COMPOSER_LINE_PX = 22 // ~14.5px * 1.5
-const COMPOSER_PAD_PX = 16 // vertical padding inside the chalk field
-const COMPOSER_MIN_PX = COMPOSER_LINE_PX * 2 + COMPOSER_PAD_PX
-const COMPOSER_AUTO_MAX_PX = COMPOSER_LINE_PX * 6 + COMPOSER_PAD_PX
-const COMPOSER_MANUAL_MAX_PX = COMPOSER_LINE_PX * 16 + COMPOSER_PAD_PX
-
-function defaultMarginWidth(viewport = typeof window !== 'undefined' ? window.innerWidth : 1200): number {
-  return Math.round(viewport * 0.25)
-}
-
-function clampMarginWidth(
-  px: number,
-  viewport = typeof window !== 'undefined' ? window.innerWidth : 1200,
-): number {
-  const max = Math.max(MARGIN_MIN_PX, Math.min(Math.round(viewport * 0.5), viewport - DESK_MIN_PX))
-  return Math.min(max, Math.max(MARGIN_MIN_PX, Math.round(px)))
-}
-
-function readStoredMarginWidth(): number {
-  try {
-    const raw = localStorage.getItem(MARGIN_WIDTH_KEY)
-    if (raw != null) {
-      const n = Number(raw)
-      if (Number.isFinite(n)) return clampMarginWidth(n)
-    }
-  } catch {
-    /* private mode / blocked storage */
-  }
-  return clampMarginWidth(defaultMarginWidth())
-}
-
-function persistMarginWidth(px: number) {
-  try {
-    localStorage.setItem(MARGIN_WIDTH_KEY, String(px))
-  } catch {
-    /* ignore */
-  }
-}
-
-/** Hidden payload for review-my-work. Transcript still shows the short label. */
-function reviewPrompt(notes?: string): string {
-  let prompt =
-    'Please review my current board and push me one step forward — point out ' +
-    'what to reconsider, but do NOT give me the answer or write the fix.'
-  const noteText = notes?.trim()
-  if (noteText) {
-    prompt += `\n\nMy notes:\n${noteText}`
-  }
-  return prompt
-}
-
-function shortDate(iso: string): string {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  const now = new Date()
-  const diffMs = now.getTime() - d.getTime()
-  const mins = Math.floor(diffMs / 60_000)
-  if (mins < 1) return 'just now'
-  if (mins < 60) return `${mins}m ago`
-  const hours = Math.floor(mins / 60)
-  if (hours < 24) return `${hours}h ago`
-  const days = Math.floor(hours / 24)
-  if (days < 7) return `${days}d ago`
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }).toLowerCase()
-}
-
-function statusMark(status: ProblemSummary['status']): { mark: string; className: string } {
-  if (status === 'solved') return { mark: '✓', className: 'mark-solved' }
-  if (status === 'attempted') return { mark: '~', className: 'mark-attempted' }
-  return { mark: '·', className: 'mark-new' }
-}
-
-/** Stable smear widths from slot index only — never from the real term. */
-function smearWidth(i: number): number {
-  const w = [64, 88, 52, 76, 96, 58, 70, 82]
-  return w[i % w.length]!
-}
+export { normalizeForDirty } from './appHelpers'
 
 export default function App() {
   const [problems, setProblems] = useState<ProblemSummary[]>([])
@@ -1185,57 +799,15 @@ export default function App() {
       </header>
 
       {settingsOpen && (
-        <div
-          className="settings-backdrop"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) closeSettings()
-          }}
-        >
-          <div className="settings-panel chalk lit" role="dialog" aria-label="providers">
-            <p className="eyebrow">providers</p>
-            {settingsModels ? (
-              (['teacher', 'gate', 'unlock', 'ingest'] as const).map((role) => (
-                <div key={role} className="settings-row">
-                  <span className="role">{role}</span>
-                  <select
-                    value={settingsModels[role].backend}
-                    onChange={(e) => patchRole(role, { backend: e.target.value })}
-                  >
-                    {settingsBackends.map((b) => (
-                      <option key={b} value={b}>
-                        {b}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    value={settingsModels[role].model}
-                    onChange={(e) => patchRole(role, { model: e.target.value })}
-                    spellCheck={false}
-                  />
-                </div>
-              ))
-            ) : (
-              !settingsError && <p className="settings-note">loading…</p>
-            )}
-            <p className="settings-note">
-              applies to new turns · the chosen cli must be on your PATH
-            </p>
-            {settingsError && <p className="settings-error">{settingsError}</p>}
-            <div className="settings-actions">
-              <button type="button" className="settings-cancel" onClick={closeSettings}>
-                cancel
-              </button>
-              <button
-                type="button"
-                className="settings-save"
-                disabled={!settingsModels || settingsSaving}
-                onClick={() => void saveSettingsPanel()}
-              >
-                {settingsSaving ? 'saving…' : 'save'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <SettingsPanel
+          settingsModels={settingsModels}
+          settingsBackends={settingsBackends}
+          settingsError={settingsError}
+          settingsSaving={settingsSaving}
+          onClose={closeSettings}
+          onSave={() => void saveSettingsPanel()}
+          patchRole={patchRole}
+        />
       )}
 
       {error && <div className="banner">{error}</div>}
@@ -1297,44 +869,7 @@ export default function App() {
                   )}
                 </div>
                 {showVocab && vocab && (
-                  <aside className="vocab" aria-label="the vocab">
-                    <div className="vocab-surface">
-                      <div className="vocab-head">
-                        <span className="vocab-title">the vocab</span>
-                        <button
-                          type="button"
-                          className="vocab-info"
-                          aria-label="what is the vocab?"
-                          aria-describedby="vocab-tip"
-                        >
-                          i
-                        </button>
-                        <span className="vocab-tip" id="vocab-tip" role="tooltip">
-                          the ideas this problem is built on. the smudged ones I won't say yet —
-                          commit to an idea of your own and I'll write it up here.
-                        </span>
-                      </div>
-                      <div className="vocab-words">
-                        {vocab.earned.map((t) => (
-                          <span key={t} className={`vocab-word${fresh.has(t) ? ' fresh' : ''}`}>{t}</span>
-                        ))}
-                        {Array.from({ length: vocab.lockedCount }, (_, i) => (
-                          <span
-                            key={`s${i}-${tapNonce}`}
-                            className={`vocab-smear${tapNonce > 0 ? ' tapped' : ''}`}
-                            style={{
-                              width: smearWidth(i),
-                              ...(tapNonce > 0 ? { animationDelay: `${i * 40}ms` } : {}),
-                            }}
-                            aria-hidden="true"
-                          />
-                        ))}
-                      </div>
-                    </div>
-                    <div className="vocab-rail" aria-hidden="true">
-                      <span className="vocab-chalkpiece" />
-                    </div>
-                  </aside>
+                  <VocabBoard vocab={vocab} fresh={fresh} tapNonce={tapNonce} />
                 )}
               </article>
               <section className="workarea">
@@ -1536,144 +1071,19 @@ export default function App() {
                   <div className="run-error">{selectedResults.error}</div>
                 )}
                 {openStack && (
-                  <div
-                    className="fan-backdrop"
-                    onClick={(e) => {
-                      if (e.target === e.currentTarget) setOpenStack(null)
-                    }}
-                  >
-                    <div className="fan-hand">
-                      {fanCards.map((c, i) => (
-                        <div
-                          key={i}
-                          className="fan-slot"
-                          style={{
-                            ...fanTransform(i, fanCards.length),
-                            animationDelay: `${i * 30}ms`,
-                          }}
-                        >
-                          <div
-                            className={`index-card fan-card${c.pass === true ? ' pass' : c.pass === false ? ' fail' : ''}`}
-                            tabIndex={0}
-                          >
-                            <div className="card-head">{c.input}</div>
-                            <div className="card-line">
-                              <span className="card-label">expected</span> {c.expected}
-                            </div>
-                            {c.got !== undefined && (
-                              <div className="card-line got">
-                                <span className="card-label">got</span> {c.got}
-                              </div>
-                            )}
-                            {c.error && <div className="card-line err">{c.error}</div>}
-                            {c.pass === true && <span className="card-stamp ok">✓</span>}
-                            {c.pass === false && <span className="card-stamp no">✗</span>}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  <FanOverlay fanCards={fanCards} onClose={() => setOpenStack(null)} />
                 )}
               </section>
               </div>
             </>
           ) : (
-            <>
-              {/* leftover chalk on the empty side of the board — pure decoration */}
-              <div className="doodles" aria-hidden="true">
-                <pre className="doodle d1">console.log("hello, world!")</pre>
-                <pre className="doodle d2">{'def fib(n):\n    return n if n < 2 else\n        fib(n-1) + fib(n-2)'}</pre>
-                <span className="doodle d3 circled">O(n log n)</span>
-                <pre className="doodle d4">{'      (8)\n     /   \\\n   (3)    (10)\n   / \\      \\\n (1) (6)    (14)'}</pre>
-                <pre className="doodle d5">{'while (left < right) …'}</pre>
-                <pre className="doodle d6">{'int[] nums = { 2, 7, 11, 15 };'}</pre>
-                <span className="doodle d7">// TODO: think first</span>
-                <span className="doodle d8">{'target − nums[i] ∈ seen ?'}</span>
-              </div>
-              <div className={`hero${problems.length > 0 ? ' compressed' : ''}`}>
-              <p className="kicker">socratic coding tutor</p>
-              <h1>
-                I won't tell you<br />
-                the answer. I'll get<br />
-                you to <em>see it</em>.
-              </h1>
-              <p>
-                Hand me a problem — by name or a LeetCode link — and we'll work it out
-                together. I ask the questions; you do the thinking.
-              </p>
-              {problems.length === 0 ? (
-                <p className="how">
-                  try: <span>two sum</span> &nbsp;·&nbsp; <span>house robber</span> &nbsp;·&nbsp;{' '}
-                  <span>container with most water</span>
-                </p>
-              ) : (
-                <div className="ledger">
-                  <p className="eyebrow">the board so far</p>
-                  {problems.map((p) => {
-                    const { mark, className } = statusMark(p.status)
-                    const latest = p.sessions[0]
-                    const n = p.sessions.length
-                    const meta =
-                      n === 0
-                        ? null
-                        : `${n} session${n === 1 ? '' : 's'} · ${shortDate(latest!.updatedAt)}`
-                    const open = expanded === p.name
-                    return (
-                      <div key={p.name} className="ledger-block">
-                        <button
-                          type="button"
-                          className="ledger-row"
-                          onClick={() => onLedgerRow(p)}
-                        >
-                          <span className={`mark ${className}`}>{mark}</span>
-                          <span className="title">{p.title}</span>
-                          {(p.difficulty || meta) && (
-                            <span className="ledger-end">
-                              {p.difficulty && (
-                                <span
-                                  className={`diff-badge ${difficultyClass(p.difficulty)}`}
-                                >
-                                  {p.difficulty.toLowerCase()}
-                                </span>
-                              )}
-                              {meta && <span className="meta">{meta}</span>}
-                            </span>
-                          )}
-                        </button>
-                        {open && (
-                          <div className="ledger-sessions">
-                            {p.sessions.map((s) => (
-                              <div key={s.id} className="ledger-session">
-                                <span className="sess-meta">
-                                  {shortDate(s.updatedAt)} · {s.turns} turn{s.turns === 1 ? '' : 's'}
-                                  {s.solved ? ' · ✓' : ''}
-                                </span>
-                                {s.first ? <span className="sess-first">{s.first}</span> : null}
-                                <button
-                                  type="button"
-                                  className="sess-action"
-                                  onClick={() => void resumeSession(s.id)}
-                                >
-                                  resume
-                                </button>
-                              </div>
-                            ))}
-                            <button
-                              type="button"
-                              className="ledger-fresh"
-                              onClick={() => void beginCard(p.name, p.title)}
-                            >
-                              fresh start
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-              </div>
-            </>
+            <HeroLedger
+              problems={problems}
+              expanded={expanded}
+              onLedgerRow={onLedgerRow}
+              onResumeSession={(id) => void resumeSession(id)}
+              onBeginCard={(name, label) => void beginCard(name, label)}
+            />
           )}
         </main>
 
