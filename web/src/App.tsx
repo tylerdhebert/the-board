@@ -511,7 +511,7 @@ export default function App() {
 
   useEffect(() => {
     if (!figureView) return
-    const onEsc = (e: KeyboardEvent) => {
+    const onEsc = (e: globalThis.KeyboardEvent) => {
       if (e.key === 'Escape') setFigureView(null)
     }
     window.addEventListener('keydown', onEsc)
