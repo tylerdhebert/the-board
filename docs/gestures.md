@@ -41,14 +41,17 @@ let need drive use.
 Wire format, line 2 of the teacher reply:
 
 ```
-POINT: <lineNumber> | <exact copy of that line from the student's editor>
+POINT: <lineNumber>[-<endLine>] | <exact copy of the first line from the student's editor>
 ```
+
+A bare line number points at one line; `POINT: 5-8 | …` highlights the block
+of lines 5–8 with the arrow on line 5. The quote always mirrors the FIRST line.
 
 The teacher reads the student's real buffer (Round B materializes it at
 `./editor.<ext>` in the teacher's cwd), so it can point honestly. The quoted
 content is the validity check:
 
-- Server parses + strips the line; passes `{ line, quote }` through
+- Server parses + strips the line; passes `{ line, endLine?, quote }` through
   `TurnResult` to the client.
 - Client verifies `editor line N (trimmed) === quote (trimmed)`. On
   mismatch (model miscounted, student edited during the turn): if the quote

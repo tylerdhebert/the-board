@@ -119,7 +119,10 @@ export class TutorSession {
   private gateDraft(reply: string, gesture: TeacherGesture | undefined): string {
     if (!gesture) return reply;
     if (gesture.kind === 'point') {
-      return reply + `\n\n[gesture: points at editor line ${gesture.line}: \`${gesture.quote}\`]`;
+      const where = gesture.endLine
+        ? `lines ${gesture.line}–${gesture.endLine}`
+        : `line ${gesture.line}`;
+      return reply + `\n\n[gesture: points at editor ${where}: \`${gesture.quote}\`]`;
     }
     if (gesture.kind === 'show') {
       const input = showCaseInput(this.card, gesture.caseNumber);

@@ -90,7 +90,7 @@ export interface TurnResult {
   unlockedThisTurn: string[]
   redrafted: boolean
   gesture?:
-    | { kind: 'point'; line: number; quote: string }
+    | { kind: 'point'; line: number; endLine?: number; quote: string }
     | { kind: 'show'; caseNumber: number }
     | { kind: 'tap' }
 }

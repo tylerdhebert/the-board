@@ -92,7 +92,7 @@ export default function App() {
   const [openStack, setOpenStack] = useState<null | 'examples' | 'tougher'>(null)
   const [vocab, setVocab] = useState<Vocab | null>(null)
   const [fresh, setFresh] = useState<Set<string>>(() => new Set())
-  const [point, setPoint] = useState<{ line: number; quote: string } | null>(null)
+  const [point, setPoint] = useState<{ line: number; endLine?: number; quote: string } | null>(null)
   const [tapNonce, setTapNonce] = useState(0)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsModels, setSettingsModels] = useState<AppSettingsModels | null>(null)
@@ -504,19 +504,29 @@ export default function App() {
   }
 
   function resolvePoint(
-    candidate: { line: number; quote: string },
+    candidate: { line: number; endLine?: number; quote: string },
     source: string,
-  ): { line: number; quote: string } | null {
+  ): { line: number; endLine?: number; quote: string } | null {
     const lines = source.split(/\r?\n/)
     const quote = candidate.quote.trim()
+    // The quote anchors the first line; a range keeps its span as the anchor moves.
+    const span =
+      candidate.endLine && candidate.endLine > candidate.line
+        ? candidate.endLine - candidate.line
+        : 0
+    const build = (startLine: number) => {
+      const endLine = startLine + span
+      if (endLine > lines.length) return null
+      return span > 0 ? { line: startLine, endLine, quote } : { line: startLine, quote }
+    }
     if (lines[candidate.line - 1]?.trim() === quote) {
-      return { line: candidate.line, quote }
+      return build(candidate.line)
     }
     const matches: number[] = []
     for (let i = 0; i < lines.length; i++) {
       if (lines[i]!.trim() === quote) matches.push(i + 1)
     }
-    if (matches.length === 1) return { line: matches[0]!, quote }
+    if (matches.length === 1) return build(matches[0]!)
     return null
   }
 
@@ -549,7 +559,15 @@ export default function App() {
     )
     if (g?.kind === 'point') {
       // Activate after reveal (or clear if validation dropped it / replace prior).
-      setPoint(activated?.kind === 'point' ? { line: activated.line, quote: activated.quote } : null)
+      setPoint(
+        activated?.kind === 'point'
+          ? {
+              line: activated.line,
+              quote: activated.quote,
+              ...(activated.endLine ? { endLine: activated.endLine } : {}),
+            }
+          : null,
+      )
     }
     if (activated?.kind === 'tap') {
       setTapNonce((n) => n + 1)
@@ -1124,7 +1142,12 @@ export default function App() {
                   {n.mode && <span className={`badge ${n.mode}`}>{n.mode}</span>}
                   {n.redrafted && <span className="badge revised">reworded</span>}
                   {n.gesture?.kind === 'point' && !n.revealing && (
-                    <span className="badge point">↳ line {n.gesture.line}</span>
+                    <span className="badge point">
+                      ↳{' '}
+                      {n.gesture.endLine
+                        ? `lines ${n.gesture.line}–${n.gesture.endLine}`
+                        : `line ${n.gesture.line}`}
+                    </span>
                   )}
                 </div>
                 {n.revealing ? (

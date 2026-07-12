@@ -7,7 +7,7 @@ import { bullets, fillTemplate, renderTranscript } from './render.js';
 import type { Message, ProblemCard, TutorMode } from './types.js';
 
 export type TeacherGesture =
-  | { kind: 'point'; line: number; quote: string }
+  | { kind: 'point'; line: number; endLine?: number; quote: string }
   | { kind: 'show'; caseNumber: number }
   | { kind: 'tap' };
 
@@ -24,7 +24,8 @@ export interface TeacherTurnContext {
   boardContext?: string;
 }
 
-const POINT_RE = /^POINT:\s*(\d+)\s*\|\s*(.+)$/i;
+// POINT: <line> | <quote>  or a range  POINT: <start>-<end> | <quote>
+const POINT_RE = /^POINT:\s*(\d+)(?:\s*[-–]\s*(\d+))?\s*\|\s*(.+)$/i;
 const SHOW_RE = /^SHOW:\s*(?:case\s+)?(\d+)\s*$/i;
 const TAP_RE = /^TAP:\s*(?:vocab)?\s*$/i;
 const GESTURE_LOOKS_RE = /^(POINT|SHOW|TAP):/i;
@@ -33,11 +34,19 @@ function parseGestureLine(line: string): TeacherGesture | undefined {
   const pointMatch = line.match(POINT_RE);
   if (pointMatch) {
     const lineNum = Number(pointMatch[1]);
-    const quote = pointMatch[2]!.trim();
-    if (Number.isInteger(lineNum) && lineNum > 0 && quote !== '') {
+    const endRaw = pointMatch[2];
+    const quote = pointMatch[3]!.trim();
+    if (!Number.isInteger(lineNum) || lineNum <= 0 || quote === '') return undefined;
+    if (endRaw === undefined) {
       return { kind: 'point', line: lineNum, quote };
     }
-    return undefined;
+    // A range must be forward and well-formed; end === start collapses to a
+    // plain point. Anything else is a malformed control line — drop it.
+    const endNum = Number(endRaw);
+    if (!Number.isInteger(endNum) || endNum < lineNum) return undefined;
+    return endNum === lineNum
+      ? { kind: 'point', line: lineNum, quote }
+      : { kind: 'point', line: lineNum, endLine: endNum, quote };
   }
 
   const showMatch = line.match(SHOW_RE);

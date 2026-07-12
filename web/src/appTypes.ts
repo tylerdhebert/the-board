@@ -1,6 +1,6 @@
 export type Mode = 'socratic' | 'analog' | 'scaffold'
 export type TeacherGesture =
-  | { kind: 'point'; line: number; quote: string }
+  | { kind: 'point'; line: number; endLine?: number; quote: string }
   | { kind: 'show'; caseNumber: number }
   | { kind: 'tap' }
 export type Note = {

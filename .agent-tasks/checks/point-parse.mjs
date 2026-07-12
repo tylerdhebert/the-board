@@ -49,6 +49,21 @@ show(
 );
 
 show(
+  'POINT range 5-8 (valid, endLine)',
+  `MODE: socratic\nPOINT: 5-8 | while (left < right) {\n\nThis whole block is the loop body.`,
+);
+
+show(
+  'POINT range 5-5 (collapses to single line, no endLine)',
+  `MODE: socratic\nPOINT: 5-5 | return mid;\n\nSame as a plain point.`,
+);
+
+show(
+  'POINT backwards range 8-5 (invalid — strip, no gesture)',
+  `MODE: socratic\nPOINT: 8-5 | return mid;\n\nEnd before start — drop it.`,
+);
+
+show(
   'SHOW: case 3 (valid)',
   `MODE: socratic\nSHOW: case 3\n\nTry this input — what happens?`,
 );

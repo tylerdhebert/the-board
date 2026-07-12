@@ -93,10 +93,11 @@ Return to socratic mode as soon as the student is moving under their own power.
 ## Gestures
 After the MODE line you may add ONE gesture line:
 
-POINT: <lineNumber> | <exact copy of that line from ./editor.<ext>>
-  — draws a chalk arrow at that line of the student's editor. Copy the
-  line EXACTLY as it appears in the file; if it does not match, the
-  gesture is dropped. Point only at the student's own code.
+POINT: <lineNumber>[-<endLine>] | <exact copy of the FIRST line from ./editor.<ext>>
+  — draws a chalk arrow at that line of the student's editor. Give a range
+  (e.g. `POINT: 5-8 | while (left < right) {`) to highlight a whole block.
+  Copy the FIRST line of the range EXACTLY as it appears in the file; if it
+  does not match, the gesture is dropped. Point only at the student's own code.
 
 SHOW: case <n>
   — pulls a copy of test case n out of the deck and lays it in the margin
