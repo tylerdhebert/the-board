@@ -1,0 +1,113 @@
+.settings-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: rgba(16, 26, 21, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.settings-panel {
+  width: 100%;
+  max-width: 520px;
+  background: var(--slate-raise);
+  padding: 24px;
+}
+.settings-panel .eyebrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--chalk-faint);
+  margin: 0 0 18px;
+}
+.settings-row {
+  display: grid;
+  grid-template-columns: 72px 110px 1fr;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.settings-row .role {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--chalk-dim);
+  text-transform: lowercase;
+}
+.settings-row select {
+  background: transparent;
+  color: var(--chalk);
+  border: 0;
+  border-bottom: 1.5px solid var(--chalk-faint);
+  font-family: var(--mono);
+  font-size: 13px;
+  padding: 6px 2px;
+  outline: none;
+  cursor: pointer;
+}
+.settings-row select:focus { border-bottom-color: var(--amber); }
+.settings-row select option { background: var(--slate-raise); color: var(--chalk); }
+.settings-row input {
+  width: 100%;
+  background: transparent;
+  border: 0;
+  border-bottom: 1.5px solid var(--chalk-faint);
+  color: var(--chalk);
+  font-family: var(--mono);
+  font-size: 13px;
+  padding: 6px 2px;
+  outline: none;
+}
+.settings-row input:focus { border-bottom-color: var(--amber); }
+.settings-note {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--chalk-faint);
+  margin: 16px 0 0;
+  line-height: 1.5;
+}
+.settings-error {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--coral);
+  margin: 10px 0 0;
+}
+.settings-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 14px;
+  margin-top: 22px;
+}
+.settings-cancel {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--chalk-dim);
+  text-transform: lowercase;
+  cursor: pointer;
+}
+.settings-cancel:hover { color: var(--chalk); }
+.settings-save {
+  font-family: var(--display);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 12px;
+  color: var(--slate-deep);
+  background: var(--amber);
+  border: 0;
+  padding: 9px 16px;
+  cursor: pointer;
+  transform: rotate(-0.6deg);
+}
+.settings-save:hover { background: #ffd76a; }
+.settings-save:disabled {
+  background: var(--chalk-faint);
+  color: var(--slate);
+  cursor: default;
+  transform: none;
+}

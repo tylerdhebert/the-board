@@ -1,0 +1,107 @@
+﻿/* ============================================================
+   THE BOARD â€” a teacher's slate for a Socratic coding tutor.
+   Signature: hand-drawn CHALK outlines (no rounded rectangles),
+   the tutor speaks in colored chalk in the margin.
+   ============================================================ */
+
+@font-face {
+  font-family: 'Bricolage Grotesque';
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url('../assets/fonts/bricolage-grotesque-latin.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 400 500;
+  font-display: swap;
+  src: url('../assets/fonts/space-grotesk-latin.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Space Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../assets/fonts/space-mono-latin-400.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Space Mono';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('../assets/fonts/space-mono-latin-700.woff2') format('woff2');
+}
+
+:root {
+  color-scheme: dark;
+
+  /* slate / board */
+  --slate: #16241d;
+  --slate-deep: #101a15;
+  --slate-raise: #1b2c24;
+
+  /* chalk */
+  --chalk: #ece6d6;
+  --chalk-dim: #93a096;
+  --chalk-faint: #52625a;
+  --chalk-line: #3a4a41;
+
+  /* colored chalk */
+  --amber: #f0c34a;   /* the tutor */
+  --coral: #ef8a6a;   /* you */
+  --sky: #8fc4cb;     /* mode / meta */
+  --rose: #e0779b;
+
+  --display: 'Bricolage Grotesque', system-ui, sans-serif;
+  --body: 'Space Grotesk', system-ui, sans-serif;
+  --mono: 'Space Mono', ui-monospace, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; }
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(120% 80% at 50% -10%, #1c2e25 0%, var(--slate) 45%, var(--slate-deep) 100%);
+  color: var(--chalk);
+  font-family: var(--body);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+/* chalk dust + faint vertical rule texture over everything */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  opacity: 0.04;
+  mix-blend-mode: screen;
+}
+
+::selection { background: rgba(240, 195, 74, 0.28); color: #fff; }
+
+/* ---- chalk outline primitive: a wobbly stroked border, no radius ---- */
+.chalk {
+  position: relative;
+  border: 0;
+}
+.chalk::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 3px solid var(--chalk-line);
+  filter: url(#chalk-rough);
+  pointer-events: none;
+}
+.chalk.lit::before { border-color: rgba(236, 230, 214, 0.35); }
+.chalk.amber::before { border-color: rgba(240, 195, 74, 0.5); }
+
