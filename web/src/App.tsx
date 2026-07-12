@@ -64,6 +64,11 @@ import WindowControls from './WindowControls'
 
 export { normalizeForDirty } from './appHelpers'
 
+// Below this desk width the layout goes compact: vocab + example decks collapse
+// into toggles so the statement and editor keep the room. Matches the former
+// container-query threshold.
+const COMPACT_DESK_PX = 1100
+
 export default function App() {
   const [problems, setProblems] = useState<ProblemSummary[]>([])
   const [expanded, setExpanded] = useState<string | null>(null)
@@ -88,6 +93,8 @@ export default function App() {
   const [stressing, setStressing] = useState(false)
   const [attemptsCollapsed, setAttemptsCollapsed] = useState(false)
   const [constraintsOpen, setConstraintsOpen] = useState(true)
+  const [compact, setCompact] = useState(false)
+  const [vocabOpen, setVocabOpen] = useState(false)
   const [sessionSolved, setSessionSolved] = useState(false)
   const [openStack, setOpenStack] = useState<null | 'examples' | 'tougher'>(null)
   const [vocab, setVocab] = useState<Vocab | null>(null)
@@ -102,6 +109,7 @@ export default function App() {
   const [marginWidth, setMarginWidth] = useState(readStoredMarginWidth)
   const [composerHeight, setComposerHeight] = useState(COMPOSER_MIN_PX)
   const [composerManual, setComposerManual] = useState(false)
+  const deskRef = useRef<HTMLElement>(null)
   const notesRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const editorSaveRef = useRef<Promise<void>>(Promise.resolve())
@@ -746,6 +754,32 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [openStack])
 
+  // Compact mode keys off the desk's own width (the tutor margin is resizable,
+  // so the window width alone would be wrong).
+  useEffect(() => {
+    const el = deskRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width ?? 0
+      setCompact((prev) => {
+        const next = w > 0 && w < COMPACT_DESK_PX
+        if (!next && prev) setVocabOpen(false)
+        return next
+      })
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  useEffect(() => {
+    if (!vocabOpen) return
+    function onKey(e: globalThis.KeyboardEvent) {
+      if (e.key === 'Escape') setVocabOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [vocabOpen])
+
   const marginMax = clampMarginWidth(
     typeof window !== 'undefined' ? window.innerWidth * 0.5 : marginWidth,
   )
@@ -756,7 +790,11 @@ export default function App() {
     vocab != null && (vocab.lockedCount > 0 || vocab.earned.length > 0)
 
   return (
-    <div className={inDesktop ? 'board in-desktop' : 'board'}>
+    <div
+      className={['board', inDesktop && 'in-desktop', compact && 'compact']
+        .filter(Boolean)
+        .join(' ')}
+    >
       {/* chalk filter — displaces only the border layers, giving a hand-drawn edge */}
       <svg className="defs" aria-hidden="true" width="0" height="0" style={{ position: 'absolute' }}>
         <filter id="chalk-rough" x="-6%" y="-12%" width="112%" height="124%">
@@ -831,7 +869,7 @@ export default function App() {
       {error && <div className="banner">{error}</div>}
 
       <div className="stage" style={{ gridTemplateColumns: `1fr ${marginWidth}px` }}>
-        <main className="desk">
+        <main className="desk" ref={deskRef}>
           {loading ? (
             <LoadingBoard query={loadingQuery} ingesting={ingesting} />
           ) : problem ? (
@@ -946,6 +984,44 @@ export default function App() {
                     )}
                   </div>
                 </div>
+                {compact && (
+                  <div className="compact-shelf">
+                    {showVocab && (
+                      <button
+                        type="button"
+                        className="shelf-chip"
+                        onClick={() => setVocabOpen(true)}
+                      >
+                        the vocab
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="shelf-chip"
+                      onClick={() => setOpenStack('examples')}
+                    >
+                      examples · {exampleCards.length}
+                    </button>
+                    {stressRows.length > 0 ? (
+                      <button
+                        type="button"
+                        className="shelf-chip"
+                        onClick={() => setOpenStack('tougher')}
+                      >
+                        tougher · {tougherCards.length}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="shelf-chip"
+                        disabled={stressing || !sessionId}
+                        onClick={() => void chalkUpTougher()}
+                      >
+                        {stressing ? 'chalking…' : 'chalk up tougher'}
+                      </button>
+                    )}
+                  </div>
+                )}
                 <div className={`workrow${attemptsCollapsed ? ' rail-collapsed' : ''}`}>
                   <div className="editor-shell chalk lit">
                     <div className="monaco-host">
@@ -1157,9 +1233,8 @@ export default function App() {
                     onGrow={scrollNotes}
                   />
                 ) : n.role === 'tutor' && hasScaffoldBlanks(n.mode, n.text) ? (
-                  // Scaffold replies are pseudocode-dominant; losing md styling
-                  // on blank-aware notes is an accepted trade. Fence-aware:
-                  // ``` lines are stripped; fenced bodies render as mono pre.
+                  // Fence-aware: ``` lines are stripped, fenced bodies render as
+                  // mono pre with blanks; prose keeps its markdown (bold / `code`).
                   <ScaffoldBlankSay
                     text={n.text}
                     values={n.blanks ?? []}
@@ -1279,6 +1354,27 @@ export default function App() {
             <img src={figureView.data} alt={figureView.alt || 'figure'} />
             {figureView.alt && <figcaption>{figureView.alt}</figcaption>}
           </figure>
+        </div>
+      )}
+      {vocabOpen && compact && showVocab && vocab && (
+        <div
+          className="vocab-modal-backdrop"
+          role="dialog"
+          aria-label="the vocab"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setVocabOpen(false)
+          }}
+        >
+          <div className="vocab-modal">
+            <VocabBoard vocab={vocab} fresh={fresh} tapNonce={tapNonce} />
+            <button
+              type="button"
+              className="vocab-modal-close"
+              onClick={() => setVocabOpen(false)}
+            >
+              close
+            </button>
+          </div>
         </div>
       )}
     </div>

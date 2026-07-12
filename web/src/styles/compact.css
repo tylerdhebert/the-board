@@ -1,0 +1,109 @@
+/* ============================================================
+   COMPACT / small-viewport mode.
+   Driven by a JS ResizeObserver on the desk (.board.compact) so it keys off
+   the desk's real width, not the window (the tutor margin is resizable).
+   The always-on vocab board and example decks would crush the editor when the
+   desk is narrow, so here they collapse into toggle chips + modals and the
+   desk stacks and scrolls, reserving the room for statement + code.
+   ============================================================ */
+
+/* the desk scrolls as one instead of clipping a fixed-height grid */
+.compact .desk {
+  overflow-y: auto;
+}
+.compact .problem-work {
+  flex-direction: column;
+  gap: 20px;
+}
+.compact .problem,
+.compact .workarea {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+/* statement + constraints flow; the desk owns the scroll */
+.compact .problem-body,
+.compact .statement-pane,
+.compact .constraints-pane .constraints {
+  overflow: visible;
+  padding-right: 0;
+}
+.compact .constraints-pane {
+  max-height: none;
+}
+/* reserve a solid slab for the editor */
+.compact .workarea {
+  min-height: 520px;
+}
+/* the inline vocab board and the example decks give way to the shelf/modals
+   (scope the vocab hide to the inline one so the modal copy still shows) */
+.compact .problem > .vocab,
+.compact .case-stacks {
+  display: none;
+}
+
+/* ---- shelf of toggle chips (only rendered in compact) ---- */
+.compact-shelf {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 12px;
+  flex: 0 0 auto;
+}
+.shelf-chip {
+  position: relative;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: lowercase;
+  color: var(--chalk-dim);
+  background: transparent;
+  border: 0;
+  padding: 5px 12px;
+  cursor: pointer;
+  outline: none;
+}
+.shelf-chip::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1.5px solid var(--chalk-line);
+  filter: url(#chalk-rough);
+  pointer-events: none;
+}
+.shelf-chip:hover:not(:disabled) { color: var(--chalk); }
+.shelf-chip:hover:not(:disabled)::before { border-color: var(--chalk-faint); }
+.shelf-chip:disabled { opacity: 0.5; cursor: default; }
+
+/* ---- vocab as a centered modal in compact ---- */
+.vocab-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(13, 17, 14, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.vocab-modal {
+  width: min(92vw, 640px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.vocab-modal .vocab {
+  margin-top: 0;
+  max-height: 72vh;
+}
+.vocab-modal-close {
+  align-self: flex-end;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: lowercase;
+  color: var(--chalk-dim);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+.vocab-modal-close:hover { color: var(--chalk); }

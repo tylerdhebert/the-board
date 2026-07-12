@@ -1,16 +1,3 @@
-/* stack Problem | Work when the desk itself gets narrow (wide tutor margin
-   or small window) — keyed on desk width, not window width */
-@container desk (max-width: 1100px) {
-  .problem-work {
-    flex-direction: column;
-    gap: 22px;
-  }
-  .problem,
-  .workarea {
-    flex: 1 1 auto;
-  }
-}
-
 /* code editor slot — right column of .problem-work */
 .workarea {
   flex: 1 1 46%;
