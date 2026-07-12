@@ -13,6 +13,7 @@ import {
   type SessionModels,
 } from '../../engine/src/index.js';
 import { ingest } from '../../engine/src/ingest.js';
+import { inlineFigures, stripFigureRefs } from '../../engine/src/leetcode.js';
 import { extractCases, type CaseSpec } from '../../engine/src/exampleCases.js';
 import { runStudentCode, type StudentRunResult } from '../../engine/src/runStudentCode.js';
 import { generateStressCases } from '../../engine/src/stressCases.js';
@@ -34,6 +35,8 @@ export function studentSafeProblem(card: ProblemCard): {
   statement: string;
   constraints: string;
   difficulty?: string;
+  url?: string;
+  figures?: { alt: string; data: string }[];
   stressCount: number;
   examples: { input: string; output: string }[];
   stress: { input: string; output: string }[];
@@ -43,6 +46,8 @@ export function studentSafeProblem(card: ProblemCard): {
     statement: card.statement,
     constraints: card.constraints,
     ...(card.difficulty ? { difficulty: card.difficulty } : {}),
+    ...(card.url ? { url: card.url } : {}),
+    ...(card.figures?.length ? { figures: card.figures } : {}),
     stressCount: card.stress?.length ?? 0,
     examples: card.examples,
     stress: card.stress ?? [],
@@ -114,10 +119,17 @@ export async function getOrIngestCard(
 
   const model = opts?.model ?? 'gpt-5.5';
   const client = opts?.client ?? createClient('codex');
-  const { card, verification } = await ingest(client, problem.statement, model, {
+  const { card, verification } = await ingest(client, stripFigureRefs(problem.statement), model, {
     metaData: problem.metaData,
   });
   card.difficulty = problem.difficulty;
+  // Trusted-source-wins (same move as judge): the verbatim LC markdown replaces
+  // the LLM's retelling of the statement/constraints.
+  const { md, figures } = await inlineFigures(problem.statementMd);
+  card.statement = md;
+  if (problem.constraintsMd) card.constraints = problem.constraintsMd;
+  card.url = problem.url;
+  if (figures.length > 0) card.figures = figures;
   await writeFile(cachePath, JSON.stringify(card, null, 2) + '\n', 'utf8');
   await writeFile(snippetsPath, JSON.stringify(problem.codeSnippets, null, 2) + '\n', 'utf8');
   return { card, verified: verification.ok, cached: false, snippets: problem.codeSnippets };

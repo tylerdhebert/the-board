@@ -6,11 +6,17 @@ export interface CodeSnippet {
 
 export type CaseRow = { input: string; output: string }
 
+export type Figure = { alt: string; data: string }
+
 export interface Problem {
   title: string
   statement: string
   constraints: string
   difficulty?: string
+  /** Canonical LeetCode URL (submit link). Absent on pre-fidelity cards. */
+  url?: string
+  /** Statement figures; the statement references them as ![alt](figure:N). */
+  figures?: Figure[]
   codeSnippets?: CodeSnippet[]
   /** Count of cached tougher cases. */
   stressCount?: number

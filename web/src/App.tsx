@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from 'react'
 import CodeEditor from './CodeEditor'
-import { mdLength, parseMd, renderMd } from './md'
+import { mdLength, parseMd, renderMd, type MdFigure } from './md'
 import {
   addTake,
   chalkStress,
@@ -125,7 +125,7 @@ function buildCaseCards(
 
 function fanTransform(i: number, n: number): CSSProperties {
   const c = i - (n - 1) / 2
-  const spread = Math.min(150, 760 / Math.max(n - 1, 1))
+  const spread = Math.min(215, 1000 / Math.max(n - 1, 1))
   const rot = c * Math.min(7, (26 / Math.max(n - 1, 1)) * 2)
   const lift = Math.abs(c) * Math.abs(c) * 7
   return {
@@ -456,6 +456,7 @@ export default function App() {
   const [query, setQuery] = useState('')
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [problem, setProblem] = useState<Problem | null>(null)
+  const [figureView, setFigureView] = useState<MdFigure | null>(null)
   const [notes, setNotes] = useState<Note[]>([])
   const [input, setInput] = useState('')
   const [code, setCode] = useState('')
@@ -472,6 +473,7 @@ export default function App() {
   const [running, setRunning] = useState(false)
   const [stressing, setStressing] = useState(false)
   const [attemptsCollapsed, setAttemptsCollapsed] = useState(false)
+  const [constraintsOpen, setConstraintsOpen] = useState(true)
   const [sessionSolved, setSessionSolved] = useState(false)
   const [openStack, setOpenStack] = useState<null | 'examples' | 'tougher'>(null)
   const [vocab, setVocab] = useState<Vocab | null>(null)
@@ -506,6 +508,15 @@ export default function App() {
   useEffect(() => {
     refreshProblems()
   }, [])
+
+  useEffect(() => {
+    if (!figureView) return
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setFigureView(null)
+    }
+    window.addEventListener('keydown', onEsc)
+    return () => window.removeEventListener('keydown', onEsc)
+  }, [figureView])
 
   async function openSettings() {
     setSettingsError(null)
@@ -1235,7 +1246,7 @@ export default function App() {
             <LoadingBoard query={loadingQuery} ingesting={ingesting} />
           ) : problem ? (
             <>
-              <article className={showVocab ? 'problem has-vocab' : 'problem'}>
+              <div className="problem-head">
                 <p className="eyebrow">the problem</p>
                 <div className="problem-title-row">
                   <h1>{problem.title}</h1>
@@ -1247,12 +1258,43 @@ export default function App() {
                     </span>
                   )}
                   {solved && <span className="solved-stamp">solved ✓</span>}
+                  {problem.url && (
+                    <a className="lc-link" href={problem.url} target="_blank" rel="noreferrer">
+                      on leetcode ↗
+                    </a>
+                  )}
                 </div>
+              </div>
+              <div className="problem-work">
+              <article className="problem">
                 <div className="problem-body">
-                  <h2>statement</h2>
-                  <p className="statement">{problem.statement}</p>
-                  <h2>constraints</h2>
-                  <p className="constraints">{problem.constraints}</p>
+                  <div className="statement-pane">
+                    <h2>statement</h2>
+                    <div className="statement">
+                      {renderMd(parseMd(problem.statement), Infinity, {
+                        figures: problem.figures,
+                        onFigure: setFigureView,
+                      })}
+                    </div>
+                  </div>
+                  {problem.constraints?.trim() && (
+                    <div className={`constraints-pane${constraintsOpen ? '' : ' collapsed'}`}>
+                      <button
+                        type="button"
+                        className="constraints-toggle"
+                        aria-expanded={constraintsOpen}
+                        onClick={() => setConstraintsOpen((v) => !v)}
+                      >
+                        <span>constraints</span>
+                        <span className="fold-glyph" aria-hidden="true">
+                          {constraintsOpen ? '▾' : '▸'}
+                        </span>
+                      </button>
+                      {constraintsOpen && (
+                        <div className="constraints">{renderMd(parseMd(problem.constraints))}</div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 {showVocab && vocab && (
                   <aside className="vocab" aria-label="the vocab">
@@ -1533,6 +1575,7 @@ export default function App() {
                   </div>
                 )}
               </section>
+              </div>
             </>
           ) : (
             <>
@@ -1792,6 +1835,19 @@ export default function App() {
           </div>
         </aside>
       </div>
+      {figureView && (
+        <div
+          className="figure-modal"
+          role="dialog"
+          aria-label={figureView.alt || 'figure'}
+          onClick={() => setFigureView(null)}
+        >
+          <figure onClick={(e) => e.stopPropagation()}>
+            <img src={figureView.data} alt={figureView.alt || 'figure'} />
+            {figureView.alt && <figcaption>{figureView.alt}</figcaption>}
+          </figure>
+        </div>
+      )}
     </div>
   )
 }

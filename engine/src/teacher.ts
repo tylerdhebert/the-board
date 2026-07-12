@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { stripFigureRefs } from './leetcode.js';
 import type { LLMClient } from './llm.js';
 import { PROMPTS_DIR } from './paths.js';
 import { bullets, fillTemplate, renderTranscript } from './render.js';
@@ -143,7 +144,7 @@ export async function teacherTurn(
     : '';
   const prompt = fillTemplate(tpl, {
     title: card.title,
-    statement: card.statement,
+    statement: stripFigureRefs(card.statement),
     constraints: card.constraints,
     brute_force: `${card.brute_force.approach} (${card.brute_force.time}, ${card.brute_force.space})`,
     optimal: `${card.optimal.approach} (${card.optimal.time}, ${card.optimal.space})`,

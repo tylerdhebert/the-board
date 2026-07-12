@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, screen } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, screen, shell } from 'electron'
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
@@ -317,6 +317,13 @@ function createWindow(webUrl) {
   }
 
   if (saved?.maximized) win.maximize()
+
+  // External links (e.g. the "on leetcode" statement link) go to the browser,
+  // never to a new Electron window.
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) void shell.openExternal(url)
+    return { action: 'deny' }
+  })
 
   void win.loadURL(webUrl)
 }

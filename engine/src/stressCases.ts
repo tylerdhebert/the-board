@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { stripFigureRefs } from './leetcode.js';
 import { completeJson, killTree, type LLMClient } from './llm.js';
 import { PROMPTS_DIR } from './paths.js';
 import type { Example, Judge, ProblemCard } from './types.js';
@@ -278,7 +279,7 @@ export async function generateStressCases(
   const prompt =
     basePrompt +
     `\n\n## TITLE\n${card.title}` +
-    `\n\n## STATEMENT\n${card.statement}` +
+    `\n\n## STATEMENT\n${stripFigureRefs(card.statement)}` +
     `\n\n## CONSTRAINTS\n${card.constraints}` +
     `\n\n## ENTRYPOINT\n${entrypoint}` +
     `\n\n## OFFICIAL EXAMPLE INPUTS\n` +

@@ -23,6 +23,10 @@ export interface ProblemCard {
   stress?: Example[];
   /** Detected at ingest from LeetCode metaData; never produced by the card LLM. */
   judge?: Judge;
+  /** Canonical LeetCode problem URL, for the submit link. Set at ingest. */
+  url?: string;
+  /** Statement figures downloaded at ingest; statement refers to them as ![alt](figure:N). */
+  figures?: { alt: string; data: string }[];
 }
 export type TutorMode = 'socratic' | 'analog' | 'scaffold';
 export type GateOffense = 'leak' | 'wrong-endorsement' | 'premature-bridge' | 'premature-answer' | 'none';
