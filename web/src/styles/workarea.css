@@ -1,0 +1,196 @@
+/* stack Problem | Work when the desk itself gets narrow (wide tutor margin
+   or small window) — keyed on desk width, not window width */
+@container desk (max-width: 1100px) {
+  .problem-work {
+    flex-direction: column;
+    gap: 22px;
+  }
+  .problem,
+  .workarea {
+    flex: 1 1 auto;
+  }
+}
+
+/* code editor slot — right column of .problem-work */
+.workarea {
+  flex: 1 1 46%;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.workarea .worklabel {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--chalk-faint);
+  margin: 0 0 10px;
+  flex: 0 0 auto;
+}
+.workactions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.runbtn {
+  background: transparent;
+  border: 0;
+  color: var(--amber);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: lowercase;
+  padding: 2px 2px;
+  cursor: pointer;
+  outline: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.runbtn .run-tri { display: block; flex: 0 0 auto; }
+.runbtn:hover:not(:disabled) { color: #ffd76a; }
+.runbtn:hover:not(:disabled) .run-tri path { stroke: #ffd76a; }
+.runbtn:disabled { color: var(--chalk-faint); cursor: default; }
+.runbtn:disabled .run-tri path { stroke: var(--amber); opacity: 0.7; }
+.dirtyflag {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: lowercase;
+  color: var(--amber);
+  opacity: 0.85;
+  flex: 0 0 auto;
+  cursor: default;
+}
+.resetbtn {
+  background: transparent;
+  border: 0;
+  color: var(--chalk-faint);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: lowercase;
+  padding: 2px 2px;
+  cursor: pointer;
+  outline: none;
+}
+.resetbtn:hover:not(:disabled) { color: var(--chalk); }
+.resetbtn:disabled { opacity: 0.35; cursor: default; }
+
+.workrow {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+}
+.workrow .editor-shell {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.attempts-rail {
+  flex: 0 0 220px;
+  width: 220px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.55;
+  border-left: 1.5px solid var(--chalk-line);
+  background: rgba(0, 0, 0, 0.14);
+  margin-left: 8px;
+  transition: flex-basis 0.15s ease, width 0.15s ease;
+}
+.attempts-rail.collapsed {
+  flex: 0 0 28px;
+  width: 28px;
+}
+.attempts-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  background: transparent;
+  border: 0;
+  color: var(--chalk-faint);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  cursor: pointer;
+  outline: none;
+  flex: 0 0 auto;
+  width: 100%;
+}
+.attempts-rail.collapsed .attempts-toggle {
+  flex-direction: column;
+  justify-content: flex-start;
+  padding: 8px 2px;
+  gap: 10px;
+  height: 100%;
+}
+.attempts-eyebrow { color: var(--chalk-faint); }
+.attempts-glyph {
+  font-size: 14px;
+  letter-spacing: 0;
+  line-height: 1;
+  color: var(--chalk-dim);
+}
+.attempts-count {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  letter-spacing: 0.12em;
+  font-size: 10px;
+  color: var(--chalk-faint);
+}
+.attempts-list {
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1 1 auto;
+  padding: 2px 0 8px;
+}
+.attempt-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  background: transparent;
+  border: 0;
+  border-left: 2px solid transparent;
+  border-bottom: 1px solid transparent;
+  color: var(--chalk-dim);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+  padding: 5px 10px;
+  cursor: pointer;
+  outline: none;
+  text-align: left;
+}
+.attempt-row .attempt-label { flex: 1 1 auto; min-width: 0; }
+.attempt-row .attempt-score { flex: 0 0 auto; }
+.attempt-row:hover { background: rgba(236, 230, 214, 0.05); color: var(--chalk); }
+.attempt-row.allpass { color: var(--sky); }
+.attempt-row.somefail { color: var(--coral); }
+.attempt-row.unrun { color: var(--chalk-faint); }
+.attempt-row.selected {
+  color: var(--chalk);
+  border-left-color: var(--amber);
+  background: rgba(236, 230, 214, 0.06);
+}
+.attempt-row.allpass.selected { color: var(--sky); }
+.attempt-row.somefail.selected { color: var(--coral); }
+

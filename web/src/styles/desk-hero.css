@@ -1,0 +1,285 @@
+
+/* ---- desktop shell: strip is the titlebar ---- */
+.in-desktop .strip { -webkit-app-region: drag; }
+.in-desktop .strip input,
+.in-desktop .strip button { -webkit-app-region: no-drag; }
+
+.winctl {
+  display: flex;
+  align-items: stretch;
+  align-self: stretch;
+  margin: -14px -22px -16px 0;
+  flex-shrink: 0;
+}
+.winctl button {
+  width: 44px;
+  border: 0;
+  background: transparent;
+  color: var(--chalk-dim);
+  font-family: var(--mono);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+.winctl button:hover { color: var(--chalk); }
+.winctl button.close:hover { color: var(--coral); }
+
+/* ---- main stage ---- */
+.stage {
+  display: grid;
+  grid-template-columns: 1fr 25vw;
+  min-height: 0;
+}
+
+/* ---- desk (problem + work) ---- */
+.desk {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 34px 40px;
+  overflow: hidden;
+  border-right: 1.5px solid var(--chalk-line);
+  filter: none;
+  /* the tutor margin is a resizable panel, so the desk's real width is
+     independent of the window — gate the two-column meta on THIS width */
+  container: desk / inline-size;
+}
+
+/* empty hero */
+.hero {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  max-width: 640px;
+  /* the desk itself no longer scrolls — a long ledger scrolls here */
+  overflow-y: auto;
+}
+.hero .kicker {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--amber);
+  margin: 0 0 18px;
+}
+.hero h1 {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: clamp(38px, 6vw, 68px);
+  line-height: 0.98;
+  letter-spacing: -0.01em;
+  margin: 0 0 20px;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.25);
+}
+.hero h1 em {
+  font-style: normal;
+  color: var(--amber);
+  position: relative;
+}
+.hero p {
+  font-size: 17px;
+  line-height: 1.6;
+  color: var(--chalk-dim);
+  max-width: 46ch;
+  margin: 0 0 10px;
+}
+.hero .how {
+  margin-top: 26px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--chalk-faint);
+  line-height: 1.9;
+}
+.hero .how span { color: var(--coral); }
+
+/* compressed hero when the ledger is present */
+.hero.compressed {
+  justify-content: flex-start;
+  padding-top: 8px;
+}
+.hero.compressed h1 {
+  font-size: clamp(28px, 4.2vw, 44px);
+  margin-bottom: 12px;
+}
+.hero.compressed p { font-size: 15px; margin-bottom: 6px; }
+
+/* the ledger â€” browsable problem roster */
+.ledger {
+  margin-top: 28px;
+  max-width: 560px;
+}
+.ledger .eyebrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--chalk-faint);
+  margin: 0 0 14px;
+}
+.ledger-block + .ledger-block { margin-top: 2px; }
+.ledger-row {
+  display: grid;
+  grid-template-columns: 1.4em 1fr auto;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  color: var(--chalk);
+  font-family: var(--mono);
+  font-size: 13.5px;
+  text-align: left;
+  padding: 7px 0;
+  cursor: pointer;
+}
+.ledger-row:hover { border-bottom-color: var(--chalk-line); }
+.ledger-row .mark {
+  font-size: 14px;
+  line-height: 1;
+  text-align: center;
+}
+.ledger-row .mark-solved { color: var(--sky); }
+.ledger-row .mark-attempted { color: var(--amber); }
+.ledger-row .mark-new { color: var(--chalk-faint); }
+.ledger-row .title {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: 0.01em;
+  color: var(--chalk);
+}
+.ledger-row .meta {
+  font-size: 11.5px;
+  color: var(--chalk-faint);
+  text-transform: lowercase;
+  white-space: nowrap;
+}
+.ledger-row .ledger-end {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+  justify-self: end;
+}
+.ledger-sessions {
+  padding: 4px 0 10px 1.4em;
+  margin-left: 10px;
+  border-left: 1.5px dashed var(--chalk-line);
+}
+.ledger-session {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 5px 0 5px 14px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--chalk-dim);
+}
+.ledger-session .sess-meta { flex: 0 1 auto; text-transform: lowercase; white-space: nowrap; }
+.ledger-session .sess-first {
+  flex: 1;
+  min-width: 0;
+  color: var(--chalk-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ledger-session .sess-action { margin-left: auto; }
+.ledger-session .sess-action,
+.ledger-fresh {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--chalk-line);
+  color: var(--amber);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+  padding: 0 1px 1px;
+  cursor: pointer;
+}
+.ledger-session .sess-action:hover,
+.ledger-fresh:hover {
+  color: #ffd76a;
+  border-bottom-color: var(--amber);
+}
+.ledger-fresh {
+  display: block;
+  margin: 6px 0 2px 14px;
+  color: var(--chalk-dim);
+  border-bottom-color: var(--chalk-line);
+}
+
+/* loading the board (novel-problem ingest) */
+.loadingboard {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 22px;
+  max-width: 540px;
+  margin: 0 auto;
+}
+.spin-ring { transform-box: fill-box; transform-origin: center; animation: spin 3.6s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.load-step {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 22px;
+  line-height: 1.3;
+  color: var(--amber);
+  margin: 0;
+  min-height: 1.4em;
+}
+.load-note {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--chalk-faint);
+  line-height: 1.75;
+  max-width: 44ch;
+  margin: 0;
+}
+@media (prefers-reduced-motion: reduce) { .spin-ring { animation: none; } }
+
+/* ---- board doodles: leftover chalk on the hero's empty side ---- */
+.doodles {
+  position: absolute;
+  top: 8%;
+  right: 3%;
+  width: 40%;
+  height: 84%;
+  pointer-events: none;
+  user-select: none;
+  z-index: 0;
+  font-family: var(--mono);
+  color: var(--chalk-faint);
+}
+.doodle {
+  position: absolute;
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.6;
+  opacity: 0.55;
+  white-space: pre;
+}
+.doodle.d1 { top: 4%; left: 12%; transform: rotate(-3deg); }
+.doodle.d2 { top: 18%; left: 34%; transform: rotate(1.5deg); font-size: 12px; }
+.doodle.d3 { top: 40%; left: 8%; transform: rotate(-6deg); }
+.doodle.circled {
+  padding: 10px 18px;
+  border: 1.5px solid var(--chalk-faint);
+  border-radius: 50%;
+  filter: url(#chalk-rough);
+}
+.doodle.d4 { top: 52%; left: 42%; transform: rotate(2deg); font-size: 12px; opacity: 0.45; }
+.doodle.d5 { top: 76%; left: 10%; transform: rotate(-1.5deg); }
+.doodle.d6 { top: 88%; left: 30%; transform: rotate(1deg); opacity: 0.4; }
+.doodle.d7 { top: 30%; left: 60%; transform: rotate(-4deg); opacity: 0.5; font-style: italic; }
+.doodle.d8 { top: 64%; left: 6%; transform: rotate(0.5deg); opacity: 0.45; }
+@media (max-width: 1250px) { .doodles { display: none; } }
+

@@ -1,0 +1,27 @@
+
+/* banner */
+.banner {
+  position: absolute; top: 62px; left: 22px; right: 22px; z-index: 5;
+  background: var(--slate-raise); color: var(--coral);
+  font-family: var(--mono); font-size: 12.5px; padding: 10px 14px;
+}
+
+/* scrollbars */
+*::-webkit-scrollbar { width: 5px; height: 5px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: var(--chalk-line); }
+*::-webkit-scrollbar-thumb:hover { background: var(--chalk-faint); }
+*::-webkit-scrollbar-corner { background: transparent; }
+*::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .thinking .dot { animation: none; }
+  .say .caret { animation: none; }
+  .vocab-word.fresh { animation: none; }
+  .fan-slot { animation: none; }
+  .fan-card { transition: none; }
+  .stack-card.top { transition: none; }
+  .point-line { animation: none; }
+  .note-card-wrap { animation: none; }
+  .vocab-smear.tapped { animation: none; }
+}

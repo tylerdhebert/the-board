@@ -1,0 +1,241 @@
+/* =========================== the margin (tutor) =========================== */
+.margin {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  min-height: 0;
+  min-width: 0;
+  background: linear-gradient(180deg, rgba(16,26,21,0) 0%, rgba(16,26,21,0.4) 100%);
+}
+.margin-resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -3px;
+  width: 6px;
+  z-index: 3;
+  cursor: col-resize;
+  touch-action: none;
+  outline: none;
+}
+.margin-resize:hover,
+.margin-resize:focus-visible {
+  background: rgba(240, 195, 74, 0.18);
+}
+.margin-head {
+  padding: 18px 22px 12px;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.margin-head .m1 {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--amber);
+  transform: rotate(-1.2deg);
+}
+.margin-head .m2 { font-family: var(--mono); font-size: 11px; color: var(--chalk-faint); letter-spacing: 0.1em; }
+
+.notes {
+  overflow-y: auto;
+  padding: 6px 22px 20px;
+}
+.note-empty {
+  font-family: var(--body);
+  color: var(--chalk-faint);
+  font-size: 14px;
+  line-height: 1.6;
+  padding: 30px 6px;
+  border-left: 2px solid var(--chalk-line);
+}
+
+/* an annotation = one message written in chalk */
+.note { margin: 18px 0; position: relative; }
+.note + .note { border-top: 1.5px dashed var(--chalk-line); padding-top: 18px; }
+
+.note.you {
+  padding-left: 16px;
+  border-left: 2px solid var(--coral);
+  box-shadow: 3px 4px 14px rgba(0, 0, 0, 0.22);
+}
+.note.you .who { color: var(--coral); }
+.note.you .say {
+  font-family: var(--body);
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--chalk);
+  white-space: pre-wrap;
+}
+.note.you .say-sub {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 12.5px;
+  color: var(--chalk-dim);
+  opacity: 0.85;
+  margin-top: 3px;
+  white-space: normal;
+}
+
+.note.tutor .say {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 17px;
+  line-height: 1.45;
+  color: var(--chalk);
+  white-space: pre-wrap;
+  text-shadow:
+    0 0 10px rgba(240, 195, 74, 0.14),
+    0 0 18px rgba(236, 230, 214, 0.08);
+}
+/* markdown inside tutor notes: code in colored chalk */
+.say code {
+  font-family: var(--mono);
+  font-size: 0.86em;
+  color: var(--sky);
+  background: rgba(143, 196, 203, 0.09);
+  padding: 1px 5px;
+}
+.say pre {
+  margin: 8px 0;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.25);
+  overflow-x: auto;
+}
+.say pre code {
+  background: transparent;
+  padding: 0;
+  font-size: 12.5px;
+}
+
+.note .who {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--chalk-faint);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.badge {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  padding: 1px 8px;
+  color: var(--slate-deep);
+  transform: rotate(-1.5deg);
+}
+.badge.socratic { background: var(--sky); }
+.badge.analog { background: var(--amber); }
+.badge.scaffold { background: var(--rose); }
+.badge.revised { background: transparent; color: var(--chalk-faint); box-shadow: inset 0 0 0 1px var(--chalk-faint); transform: rotate(1deg); }
+.badge.point {
+  background: transparent;
+  color: var(--amber);
+  box-shadow: inset 0 0 0 1px rgba(240, 195, 74, 0.45);
+  transform: rotate(-1deg);
+  letter-spacing: 0.08em;
+}
+
+/* POINT gesture — chalk underline + gutter arrow */
+.point-line {
+  background: rgba(240, 195, 74, 0.07);
+  box-shadow: inset 2px 0 0 rgba(240, 195, 74, 0.65);
+  animation: point-pulse 900ms ease-out;
+}
+@keyframes point-pulse {
+  from { background: rgba(240, 195, 74, 0.22); }
+}
+.point-glyph {
+  position: relative;
+}
+.point-glyph::after {
+  content: '➜';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--amber);
+  font-size: 12px;
+  line-height: 1;
+  filter: url(#chalk-rough);
+}
+
+/* SHOW — inline index card dealt into the tutor note */
+.note-card-wrap {
+  margin-top: 10px;
+  animation: card-drag-in 350ms ease-out both;
+}
+@keyframes card-drag-in {
+  from {
+    transform: translate(-46px, 10px) rotate(-7deg);
+    opacity: 0;
+  }
+}
+.note-card {
+  width: 200px;
+  min-height: 110px;
+  padding: 6px 12px 10px;
+  transform: rotate(-1.2deg);
+  position: relative;
+  overflow: hidden;
+}
+.note-card.tougher {
+  box-shadow:
+    inset 0 0 0 1.5px rgba(240, 195, 74, 0.45),
+    0 2px 6px rgba(0, 0, 0, 0.35);
+}
+.note-card.fail {
+  box-shadow:
+    inset 0 0 0 2px rgba(180, 69, 58, 0.7),
+    0 2px 6px rgba(0, 0, 0, 0.35);
+}
+.note-card.tougher.fail {
+  box-shadow:
+    inset 0 0 0 2px rgba(180, 69, 58, 0.7),
+    0 2px 6px rgba(0, 0, 0, 0.35);
+}
+.note-card.fail .card-line.got {
+  color: #b4453a;
+}
+
+/* TAP — smudge wiggle */
+.vocab-smear.tapped {
+  animation: smear-wiggle 700ms ease-in-out;
+}
+@keyframes smear-wiggle {
+  0% { transform: rotate(-1.1deg); opacity: 0.5; }
+  25% { transform: rotate(2deg); opacity: 0.85; }
+  50% { transform: rotate(-2deg); opacity: 0.75; }
+  75% { transform: rotate(1.5deg); opacity: 0.85; }
+  100% { transform: rotate(-1.1deg); opacity: 0.5; }
+}
+
+.unlocked {
+  margin-top: 8px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--amber);
+}
+.unlocked b { font-weight: 700; }
+
+/* thinking */
+.thinking {
+  display: flex; align-items: center; gap: 10px;
+  font-family: var(--body); font-size: 14px; color: var(--chalk-dim);
+  padding: 14px 0;
+}
+.thinking .dot { width: 7px; height: 7px; background: var(--amber); display: inline-block; animation: pulse 1.1s infinite ease-in-out; }
+.thinking .dot:nth-child(2) { animation-delay: 0.18s; }
+.thinking .dot:nth-child(3) { animation-delay: 0.36s; }
+@keyframes pulse { 0%,100%{opacity:0.25;transform:translateY(0)} 50%{opacity:1;transform:translateY(-3px)} }
+
+/* typewriter caret while the tutor's reply reveals */
+.say .caret { color: var(--amber); animation: caret-blink 0.9s steps(1) infinite; }
+@keyframes caret-blink { 0%,100%{opacity:1} 50%{opacity:0.15} }
+
