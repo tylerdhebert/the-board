@@ -1,10 +1,13 @@
-/* vocabulary — wood-framed board filling the column below the statement */
+/* vocabulary — wood-framed board anchored to the desk bottom */
 .vocab {
   position: relative;
-  /* grows to the desk bottom (the slate surface absorbs the extra); may
-     shrink (and clip) when the column is tight — never an internal scroll */
+  /* grows into spare column height but only to a board-like cap (a two-line
+     statement must not produce a monolith); the auto margin then pins it to
+     the desk bottom so slack sits above it, not under it. May shrink (and
+     clip) when the column is tight — never an internal scroll. */
   flex: 1 1 auto;
-  margin-top: 16px;
+  max-height: 380px;
+  margin-top: auto;
   display: flex;
   flex-direction: column;
   padding: 11px 11px 0;

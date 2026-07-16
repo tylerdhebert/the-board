@@ -37,9 +37,12 @@
 }
 .problem-body {
   /* hug content so constraints follow the statement directly — no dead gap;
-     shrinks (and the statement scrolls) only when the column actually overflows */
+     shrinks (and the statement scrolls) only when the column actually overflows.
+     The bottom margin keeps the vocab board off its heels when the column is
+     tight (the board's own margin-top: auto collapses to zero under pressure). */
   flex: 0 1 auto;
   min-height: 0;
+  margin-bottom: 16px;
   display: flex;
   flex-direction: column;
 }
