@@ -27,4 +27,7 @@ contextBridge.exposeInMainWorld('tutorDesktop', {
   lcLogout() {
     return ipcRenderer.invoke('lc:logout')
   },
+  openArtifact(sessionId, file) {
+    return ipcRenderer.invoke('artifact:open', sessionId, file)
+  },
 })

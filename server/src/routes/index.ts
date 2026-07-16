@@ -10,6 +10,7 @@ import { handleSettings } from './settings.js';
 import { tryServeStatic } from './static.js';
 import { handleStress } from './stress.js';
 import { handleSubmit } from './submit.js';
+import { handleArtifact } from './artifacts.js';
 import { CORS, sendJson } from './http.js';
 
 export async function handle(
@@ -35,6 +36,7 @@ export async function handle(
   if (await handleStress(method, pathname, res)) return;
   if (await handleRun(method, pathname, req, res)) return;
   if (await handleSubmit(method, pathname, req, res)) return;
+  if (await handleArtifact(method, pathname, res)) return;
 
   if (tryServeStatic(req, res, pathname)) return;
 

@@ -6,6 +6,7 @@ export type PersistedNote = {
   mode?: string;
   unlocked?: string[];
   redrafted?: boolean;
+  artifact?: { title: string; file: string };
 };
 
 export type PersistedTake = {
@@ -54,6 +55,7 @@ export type NoteRow = {
   mode: string | null;
   unlocked: string | null;
   redrafted: number | null;
+  artifact: string | null;
 };
 
 export type TakeRow = {

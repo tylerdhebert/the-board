@@ -11,17 +11,23 @@ export type TeacherGesture =
   | { kind: 'show'; caseNumber: number }
   | { kind: 'tap' };
 
+export interface TeacherArtifactRequest {
+  title: string;
+}
+
 export interface TeacherReply {
   mode: TutorMode;
   reply: string;
   raw: string;
   gesture?: TeacherGesture;
+  artifact?: TeacherArtifactRequest;
 }
 
 /** Optional per-turn board context for the teacher (cwd + already-rendered lines). */
 export interface TeacherTurnContext {
   cwd?: string;
   boardContext?: string;
+  language?: string;
 }
 
 // POINT: <line> | <quote>  or a range  POINT: <start>-<end> | <quote>
@@ -29,6 +35,8 @@ const POINT_RE = /^POINT:\s*(\d+)(?:\s*[-–]\s*(\d+))?\s*\|\s*(.+)$/i;
 const SHOW_RE = /^SHOW:\s*(?:case\s+)?(\d+)\s*$/i;
 const TAP_RE = /^TAP:\s*(?:vocab)?\s*$/i;
 const GESTURE_LOOKS_RE = /^(POINT|SHOW|TAP):/i;
+const ARTIFACT_LOOKS_RE = /^ARTIFACT:/i;
+const CONTROL_LOOKS_RE = /^(POINT|SHOW|TAP|ARTIFACT):/i;
 
 function parseGestureLine(line: string): TeacherGesture | undefined {
   const pointMatch = line.match(POINT_RE);
@@ -65,6 +73,12 @@ function parseGestureLine(line: string): TeacherGesture | undefined {
   return undefined;
 }
 
+function parseArtifactLine(line: string): TeacherArtifactRequest | undefined {
+  const match = line.match(/^ARTIFACT:\s*(.*?)\s*$/i);
+  const title = match?.[1]?.trim();
+  return title ? { title } : undefined;
+}
+
 /** Numbered case list for the teacher prompt (officials first, then tougher). */
 export function renderCases(card: ProblemCard): string {
   const lines: string[] = [];
@@ -81,8 +95,8 @@ export function renderCases(card: ProblemCard): string {
 }
 
 /**
- * Pure parser for teacher raw output: MODE line, optional gesture control
- * line, then prose. Used by teacherTurn and unit-driven by the parse check.
+ * Pure parser for teacher raw output: MODE line, up to two optional control
+ * lines (one gesture and one artifact request), then prose.
  */
 export function parseTeacherReply(raw: string): TeacherReply {
   const lines = raw.split(/\r?\n/);
@@ -107,8 +121,9 @@ export function parseTeacherReply(raw: string): TeacherReply {
   const mode = match[1]!.toLowerCase() as TutorMode;
   let bodyStart = firstNonEmptyIdx + 1;
   let gesture: TeacherGesture | undefined;
+  let artifact: TeacherArtifactRequest | undefined;
 
-  // Next non-empty line may be ONE gesture control line.
+  // The first non-empty line after MODE may be either control-line class.
   let nextNonEmptyIdx = -1;
   for (let i = bodyStart; i < lines.length; i++) {
     if (lines[i]!.trim() !== '') {
@@ -117,16 +132,40 @@ export function parseTeacherReply(raw: string): TeacherReply {
     }
   }
 
-  if (nextNonEmptyIdx >= 0 && GESTURE_LOOKS_RE.test(lines[nextNonEmptyIdx]!)) {
-    gesture = parseGestureLine(lines[nextNonEmptyIdx]!);
+  if (nextNonEmptyIdx >= 0 && CONTROL_LOOKS_RE.test(lines[nextNonEmptyIdx]!)) {
+    const control = lines[nextNonEmptyIdx]!;
+    if (GESTURE_LOOKS_RE.test(control)) gesture = parseGestureLine(control);
+    if (ARTIFACT_LOOKS_RE.test(control)) artifact = parseArtifactLine(control);
     // Strip the control line whether or not it validated — half-formed
     // control lines must never reach the student.
     bodyStart = nextNonEmptyIdx + 1;
   }
 
+  if (bodyStart > firstNonEmptyIdx + 1) {
+    let secondControlIdx = -1;
+    for (let i = bodyStart; i < lines.length; i++) {
+      if (lines[i]!.trim() !== '') {
+        secondControlIdx = i;
+        break;
+      }
+    }
+    if (secondControlIdx >= 0 && CONTROL_LOOKS_RE.test(lines[secondControlIdx]!)) {
+      const control = lines[secondControlIdx]!;
+      if (GESTURE_LOOKS_RE.test(control) && !gesture) gesture = parseGestureLine(control);
+      if (ARTIFACT_LOOKS_RE.test(control) && !artifact) artifact = parseArtifactLine(control);
+      bodyStart = secondControlIdx + 1;
+    }
+  }
+
   let reply = lines.slice(bodyStart).join('\n');
   reply = reply.replace(/^\s*\n+/, '');
-  return gesture ? { mode, reply, raw, gesture } : { mode, reply, raw };
+  return {
+    mode,
+    reply,
+    raw,
+    ...(gesture ? { gesture } : {}),
+    ...(artifact ? { artifact } : {}),
+  };
 }
 
 export async function teacherTurn(

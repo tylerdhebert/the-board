@@ -49,6 +49,7 @@ export interface PersistedNote {
   mode?: string
   unlocked?: string[]
   redrafted?: boolean
+  artifact?: { title: string; file: string }
 }
 
 export type RunCaseResult = {
@@ -93,6 +94,7 @@ export interface TurnResult {
     | { kind: 'point'; line: number; endLine?: number; quote: string }
     | { kind: 'show'; caseNumber: number }
     | { kind: 'tap' }
+  artifact?: { title: string; file: string; url: string }
 }
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
@@ -141,7 +143,7 @@ export async function createSession(
   })
 }
 
-export type TurnStage = 'unlock' | 'draft' | 'gate' | 'redraft'
+export type TurnStage = 'unlock' | 'draft' | 'gate' | 'redraft' | 'artifact'
 
 export async function submitTurn(
   sessionId: string,

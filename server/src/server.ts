@@ -11,6 +11,7 @@ const paths = appPaths();
 process.env.TUTOR_LOGS_DIR = paths.logsDir;
 process.env.TUTOR_RUN_SCRATCH_DIR = paths.runScratchDir;
 mkdirSync(paths.logsDir, { recursive: true });
+mkdirSync(paths.artifactsDir, { recursive: true });
 
 const server = http.createServer(createRequestHandler());
 

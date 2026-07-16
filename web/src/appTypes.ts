@@ -15,6 +15,7 @@ export type Note = {
   /** Ephemeral fill-ins for scaffold ____ holes (not persisted). */
   blanks?: string[]
   sentBack?: boolean
+  artifact?: { title: string; file: string; url?: string }
 }
 
 export type CardState = {

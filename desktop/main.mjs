@@ -53,6 +53,19 @@ let lcLoginWindow = null
 let lcLoginPromise = null
 let shuttingDown = false
 
+function validArtifactPart(value, kind) {
+  const pattern = kind === 'session'
+    ? /^[a-zA-Z0-9-]+$/
+    : /^\d+-[a-z0-9]+(?:-[a-z0-9]+)*\.html$/
+  return typeof value === 'string' && pattern.test(value)
+}
+
+function artifactRoot() {
+  return app.isPackaged
+    ? path.join(app.getPath('userData'), 'artifacts')
+    : path.join(repoRoot, 'artifacts')
+}
+
 function pad2(n) {
   return String(n).padStart(2, '0')
 }
@@ -244,6 +257,17 @@ ipcMain.handle('lc:logout', async () => {
   if (!response.ok) throw new Error(`Could not sign out of LeetCode (${response.status})`)
   await session.fromPartition('persist:leetcode').clearStorageData()
   return { signedIn: false }
+})
+
+ipcMain.handle('artifact:open', async (_event, sessionId, file) => {
+  if (!validArtifactPart(sessionId, 'session') || !validArtifactPart(file, 'file')) {
+    throw new Error('Invalid artifact path')
+  }
+  const root = artifactRoot()
+  const target = path.resolve(root, sessionId, file)
+  if (!target.startsWith(path.resolve(root) + path.sep)) throw new Error('Invalid artifact path')
+  const result = await shell.openPath(target)
+  if (result) throw new Error(result)
 })
 
 function startPackagedApi() {

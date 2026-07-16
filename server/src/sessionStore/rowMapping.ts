@@ -42,6 +42,7 @@ export function noteFromRow(row: NoteRow): PersistedNote {
   if (row.mode != null) note.mode = row.mode;
   if (row.unlocked != null) note.unlocked = JSON.parse(row.unlocked) as string[];
   if (row.redrafted != null) note.redrafted = row.redrafted !== 0;
+  if (row.artifact != null) note.artifact = JSON.parse(row.artifact) as { title: string; file: string };
   return note;
 }
 

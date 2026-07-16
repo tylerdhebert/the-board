@@ -1,4 +1,5 @@
 import { gateCheck } from './gate.js';
+import { artifactTextForGate, artifactTurn, type TutorArtifact } from './artifact.js';
 import type { LLMClient } from './llm.js';
 import { createClient } from './providers.js';
 import { teacherTurn, type TeacherGesture, type TeacherTurnContext } from './teacher.js';
@@ -9,7 +10,7 @@ import { judgeReveal, judgeUnlock } from './unlockJudge.js';
 export interface RoleConfig { backend: string; model: string }
 export interface SessionModels { teacher: RoleConfig; gate: RoleConfig; unlock: RoleConfig }
 
-export type TurnStage = 'unlock' | 'draft' | 'gate' | 'redraft';
+export type TurnStage = 'unlock' | 'draft' | 'gate' | 'redraft' | 'artifact';
 
 export type { TeacherGesture };
 
@@ -20,6 +21,7 @@ export interface TurnResult {
   redrafted: boolean;
   unlockedThisTurn: string[];
   gesture?: TeacherGesture;
+  artifact?: TutorArtifact;
 }
 
 /** Optional board context for the teacher only (cwd + rendered BOARD lines). */
@@ -136,6 +138,39 @@ export class TutorSession {
     return reply + `\n\n[gesture: taps the vocab board without revealing anything]`;
   }
 
+  private async authorArtifact(
+    concept: string | undefined,
+    mode: TutorMode,
+    studentMessage: string,
+    onStage: ((stage: TurnStage) => void) | undefined,
+    turnContext: SubmitTurnContext | undefined,
+    direct: boolean,
+  ): Promise<{
+    artifact?: TutorArtifact;
+    trace?: { title: string; gate: GateVerdict | 'direct' | 'dropped' };
+  }> {
+    if (!concept) return {};
+    onStage?.('artifact');
+    try {
+      const artifact = await artifactTurn(
+        this.teacherClient, this.card, this._transcript, this._lockedTerms,
+        this.models.teacher.model, mode, concept, turnContext,
+      );
+      if (!artifact) return { trace: { title: concept, gate: 'dropped' } };
+      if (direct) return { artifact, trace: { title: artifact.title, gate: 'direct' } };
+      const gate = await gateCheck(
+        this.gateClient, this.card, mode, studentMessage,
+        artifactTextForGate(artifact.title, artifact.html), this._lockedTerms, this.models.gate.model,
+      );
+      if (gate.verdict === 'REVISE') {
+        return { trace: { title: artifact.title, gate: 'dropped' } };
+      }
+      return { artifact, trace: { title: artifact.title, gate } };
+    } catch {
+      return { trace: { title: concept, gate: 'dropped' } };
+    }
+  }
+
   /** Off-the-record turn: full-context teacher, no gate; unlock reveals after. */
   private async submitDirect(
     studentMessage: string,
@@ -174,6 +209,9 @@ export class TutorSession {
 
     const verdict: GateVerdict = { verdict: 'PASS', offense: 'none', note: 'direct mode — gate off' };
     this._transcript.push({ role: 'teacher', content: t.reply });
+    const authored = await this.authorArtifact(
+      t.artifact?.title, t.mode, studentMessage, onStage, turnContext, true,
+    );
 
     await this.tracer.endTurn({
       turn,
@@ -186,6 +224,7 @@ export class TutorSession {
       finalMode: t.mode,
       finalReply: t.reply,
       finalVerdict: verdict,
+      ...(authored.trace ? { artifact: authored.trace } : {}),
     });
 
     return {
@@ -195,6 +234,7 @@ export class TutorSession {
       redrafted: false,
       unlockedThisTurn,
       ...(t.gesture ? { gesture: t.gesture } : {}),
+      ...(authored.artifact ? { artifact: authored.artifact } : {}),
     };
   }
 
@@ -265,6 +305,9 @@ export class TutorSession {
     }
 
     this._transcript.push({ role: 'teacher', content: t.reply });
+    const authored = await this.authorArtifact(
+      t.artifact?.title, t.mode, studentMessage, onStage, turnContext, false,
+    );
 
     await this.tracer.endTurn({
       turn,
@@ -277,6 +320,7 @@ export class TutorSession {
       finalMode: t.mode,
       finalReply: t.reply,
       finalVerdict: verdict,
+      ...(authored.trace ? { artifact: authored.trace } : {}),
     });
 
     return {
@@ -286,6 +330,7 @@ export class TutorSession {
       redrafted,
       unlockedThisTurn,
       ...(t.gesture ? { gesture: t.gesture } : {}),
+      ...(authored.artifact ? { artifact: authored.artifact } : {}),
     };
   }
 }

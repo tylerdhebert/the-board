@@ -11,6 +11,7 @@ export interface TurnTrace {
   turn: number; ts: string; studentMsg: string;
   lockedBefore: string[]; lockedAfter: string[]; unlocked: string[];
   redrafted: boolean; finalMode: TutorMode; finalReply: string; finalVerdict: GateVerdict;
+  artifact?: { title: string; gate: GateVerdict | 'direct' | 'dropped' };
   calls: LLMCallTrace[];
 }
 export interface Tracer {

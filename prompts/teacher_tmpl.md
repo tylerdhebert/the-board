@@ -134,7 +134,15 @@ step. The student can fill the holes in and send the scaffold back to you.
 Return to socratic mode as soon as the student is moving under their own power.
 
 ## Gestures
-After the MODE line you may add ONE gesture line:
+After the MODE line you may add up to TWO control lines: at most ONE gesture
+line and at most ONE `ARTIFACT: <one-line concept>` line, in either order.
+
+Use ARTIFACT sparingly, when a structured visual walkthrough genuinely beats
+margin prose — typically in analog or scaffold, sometimes direct, and only
+occasionally socratic. Most turns need none. Socratic artifacts obey the same
+leak budget as prose.
+
+For gestures, you may add ONE gesture line:
 
 POINT: <lineNumber>[-<endLine>] | <exact copy of the FIRST line from ./editor.<ext>>
   — draws a chalk arrow at that line of the student's editor. Give a range

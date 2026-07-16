@@ -4,6 +4,7 @@ import {
   renderBoardContext,
 } from '../teacherScratch.js';
 import { getOrRestore, persistEntry } from './context.js';
+import { storeArtifact } from './artifacts.js';
 import { CORS, readJsonBody, sendEvent, sendJson } from './http.js';
 
 export async function handleSubmit(
@@ -45,19 +46,32 @@ export async function handleSubmit(
     const result = await entry.session.submit(
       message,
       (stage) => sendEvent(res, 'stage', { stage }),
-      { cwd: teacherCwd, boardContext },
+      { cwd: teacherCwd, boardContext, language: entry.persisted.lang },
       { direct },
     );
     entry.persisted.notes.push({
       role: 'student',
       text: display ?? message,
     });
+    let storedArtifact: { title: string; file: string; url: string } | undefined;
+    if (result.artifact) {
+      try {
+        storedArtifact = await storeArtifact(
+          sessionId,
+          entry.persisted.notes.length,
+          result.artifact,
+        );
+      } catch (artifactErr) {
+        console.warn('failed to store artifact', sessionId, artifactErr);
+      }
+    }
     entry.persisted.notes.push({
       role: 'tutor',
       text: result.reply,
       mode: result.mode,
       unlocked: result.unlockedThisTurn,
       redrafted: result.redrafted,
+      ...(storedArtifact ? { artifact: { title: storedArtifact.title, file: storedArtifact.file } } : {}),
     });
     // Reply first, persist after — a disk-write failure must never eat a
     // reply the tutor already produced.
@@ -67,6 +81,7 @@ export async function handleSubmit(
       unlockedThisTurn: result.unlockedThisTurn,
       redrafted: result.redrafted,
       gesture: result.gesture,
+      artifact: storedArtifact,
     });
     res.end();
     try {

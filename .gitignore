@@ -20,3 +20,4 @@ tutor.db-wal
 tutor.db-shm
 
 cards/
+artifacts/

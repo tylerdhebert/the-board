@@ -33,8 +33,8 @@ function migrateFromJsonFiles(database: DatabaseSync): void {
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const insertNote = database.prepare(`
-    INSERT INTO notes (session_id, seq, role, text, mode, unlocked, redrafted)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO notes (session_id, seq, role, text, mode, unlocked, redrafted, artifact)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   let migrated = 0;
@@ -73,6 +73,7 @@ function migrateFromJsonFiles(database: DatabaseSync): void {
           n.mode ?? null,
           n.unlocked == null ? null : JSON.stringify(n.unlocked),
           n.redrafted == null ? null : n.redrafted ? 1 : 0,
+          n.artifact == null ? null : JSON.stringify(n.artifact),
         );
       }
       migrated++;
@@ -115,6 +116,7 @@ export function getDb(): DatabaseSync {
       mode TEXT,
       unlocked TEXT,
       redrafted INTEGER,
+      artifact TEXT,
       PRIMARY KEY (session_id, seq)
     );
     CREATE TABLE IF NOT EXISTS takes (
@@ -132,6 +134,10 @@ export function getDb(): DatabaseSync {
       value TEXT NOT NULL
     );
   `);
+  const noteColumns = database.prepare('PRAGMA table_info(notes)').all() as { name: string }[];
+  if (!noteColumns.some((column) => column.name === 'artifact')) {
+    database.exec('ALTER TABLE notes ADD COLUMN artifact TEXT');
+  }
   migrateFromJsonFiles(database);
   db = database;
   return database;

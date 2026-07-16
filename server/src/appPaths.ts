@@ -10,6 +10,7 @@ export type AppPaths = {
   dbPath: string; // TUTOR_DB_PATH > dataDir/tutor.db > <repo>/tutor.db
   cardsDir: string; // dataDir/cards > <repo>/cards
   logsDir: string; // dataDir/logs > <repo>/logs
+  artifactsDir: string; // dataDir/artifacts > <repo>/artifacts
   scratchDir: string; // TUTOR_SCRATCH_DIR > dataDir/scratch > <repo>/server
   teacherScratchDir: string; // TUTOR_TEACHER_SCRATCH_DIR > scratchDir/.teacher-scratch
   runScratchDir: string; // scratchDir/.run-scratch
@@ -39,6 +40,10 @@ export function appPaths(): AppPaths {
       ? path.join(dataDir, 'logs')
       : path.join(repoRoot, 'logs');
 
+  const artifactsDir = dataDir
+    ? path.join(dataDir, 'artifacts')
+    : path.join(repoRoot, 'artifacts');
+
   const scratchDir = process.env.TUTOR_SCRATCH_DIR
     ? path.resolve(process.env.TUTOR_SCRATCH_DIR)
     : dataDir
@@ -65,6 +70,7 @@ export function appPaths(): AppPaths {
     dbPath,
     cardsDir,
     logsDir,
+    artifactsDir,
     scratchDir,
     teacherScratchDir,
     runScratchDir,

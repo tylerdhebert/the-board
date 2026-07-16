@@ -1,4 +1,4 @@
-import { mkdir, readFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import * as readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
@@ -59,6 +59,14 @@ async function main(): Promise<void> {
 
       const result = await session.submit(trimmed, undefined, undefined, { direct });
       console.log(`tutor [${result.mode}]> ${result.reply}`);
+      if (result.artifact) {
+        const artifactsDir = join(logsDir, 'artifacts');
+        await mkdir(artifactsDir, { recursive: true });
+        const slug = result.artifact.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'walkthrough';
+        const artifactPath = join(artifactsDir, `${session.turn}-${slug}.html`);
+        await writeFile(artifactPath, result.artifact.html, 'utf8');
+        console.log(`${DIM}(walkthrough: ${artifactPath})${RESET}`);
+      }
       if (result.unlockedThisTurn.length > 0) {
         console.log(`${DIM}(unlocked: ${result.unlockedThisTurn.join(', ')})${RESET}`);
       }

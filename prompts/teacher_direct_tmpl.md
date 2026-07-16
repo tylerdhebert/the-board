@@ -43,7 +43,12 @@ expressions, and values; keep everything else prose.
   Depth on request.
 
 ## Gestures
-After the MODE line you may add ONE gesture line:
+After the MODE line you may add up to TWO control lines: at most ONE gesture
+line and at most ONE `ARTIFACT: <one-line concept>` line, in either order.
+Use ARTIFACT sparingly when a structured visual walkthrough genuinely beats
+margin prose. Most turns need none.
+
+For gestures, you may add ONE gesture line:
 
 POINT: <lineNumber>[-<endLine>] | <exact copy of the FIRST line from ./editor.<ext>>
   — draws a chalk arrow at that line of the student's editor. Copy the FIRST

@@ -10,6 +10,7 @@ export type TutorDesktopBridge = {
   }) => Promise<{ path: string; sha256: string }>
   lcLogin: () => Promise<{ signedIn: boolean }>
   lcLogout: () => Promise<{ signedIn: boolean }>
+  openArtifact: (sessionId: string, file: string) => Promise<void>
 }
 
 declare global {

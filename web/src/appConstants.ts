@@ -19,6 +19,7 @@ export const STAGE_COPY: Record<TurnStage, string> = {
   draft: 'thinking about your move…',
   gate: "making sure i'm not giving it away…",
   redraft: 'rewording — i almost said too much…',
+  artifact: 'chalking up a walkthrough…',
 }
 
 export const MARGIN_WIDTH_KEY = 'the-board:margin-width'

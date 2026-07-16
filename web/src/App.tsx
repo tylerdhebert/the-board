@@ -436,6 +436,7 @@ export default function App() {
           mode: n.mode as Mode | undefined,
           unlocked: n.unlocked,
           redrafted: n.redrafted,
+          artifact: n.artifact,
           revealing: false,
         })),
       )
@@ -508,6 +509,7 @@ export default function App() {
           redrafted: r.redrafted,
           revealing: true,
           ...(r.gesture ? { gesture: r.gesture } : {}),
+          ...(r.artifact ? { artifact: r.artifact } : {}),
         },
       ])
     } catch (err) {
@@ -1305,6 +1307,23 @@ export default function App() {
                     </div>
                   )
                 })()}
+                {n.artifact && !n.revealing && (
+                  <button
+                    type="button"
+                    className="artifact-chip"
+                    onClick={() => {
+                      if (!sessionId) return
+                      if (window.tutorDesktop) {
+                        void window.tutorDesktop.openArtifact(sessionId, n.artifact!.file)
+                      } else {
+                        window.open(n.artifact!.url ?? `/api/artifacts/${sessionId}/${n.artifact!.file}`)
+                      }
+                    }}
+                  >
+                    <span>📄 {n.artifact.title}</span>
+                    <small>{n.artifact.file}</small>
+                  </button>
+                )}
                 {!n.revealing && n.unlocked && n.unlocked.length > 0 && (
                   <p className="unlocked">
                     <b>{n.mode === 'direct' ? '⏻ now on the table:' : "✓ you've got it:"}</b>{' '}
