@@ -43,10 +43,19 @@
 }
 .wordmark .tail { color: var(--chalk-dim); font-size: 12px; font-family: var(--mono); }
 
+/* the flexible gap between wordmark and loader — a real element (not an auto
+   margin) so it can guarantee a minimum: this is the titlebar's grab zone */
+.strip-drag {
+  flex: 1 0 90px;
+  align-self: stretch;
+}
+
 /* ---- problem loader (name or link) ---- */
-.loader { margin-left: auto; display: flex; align-items: stretch; gap: 0; }
+.loader { display: flex; align-items: stretch; gap: 0; min-width: 0; }
 .loader input {
+  flex: 0 1 340px;
   width: 340px;
+  min-width: 110px;
   max-width: 44vw;
   background: transparent;
   border: 0;
@@ -65,6 +74,7 @@
   text-transform: uppercase;
   letter-spacing: 0.06em;
   font-size: 12px;
+  white-space: nowrap;
   color: var(--slate-deep);
   background: var(--amber);
   border: 0;
@@ -89,4 +99,15 @@
   flex-shrink: 0;
 }
 .stripbtn:hover { color: var(--chalk); }
+.stripbtn.cog {
+  display: inline-flex;
+  align-items: center;
+}
+.stripbtn.cog svg { display: block; transition: transform 200ms ease; }
+.stripbtn.cog:hover svg { transform: rotate(40deg); }
+
+/* narrow windows: the tagline is decoration — give its width to the grab zone */
+@media (max-width: 1040px) {
+  .wordmark .tail { display: none; }
+}
 

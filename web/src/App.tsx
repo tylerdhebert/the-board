@@ -921,6 +921,9 @@ export default function App() {
           <b>The Board</b>
           <span className="tail">// answers stay on my side</span>
         </button>
+        {/* guaranteed grab zone — never shrinks away, so the frameless window
+            stays draggable even at the 720px minimum */}
+        <div className="strip-drag" aria-hidden="true" />
         <div className="loader">
           <input
             value={query}
@@ -933,8 +936,25 @@ export default function App() {
             {loading ? 'chalking…' : 'to the board'}
           </button>
         </div>
-        <button type="button" className="stripbtn" onClick={() => void openSettings()}>
-          providers
+        <button
+          type="button"
+          className="stripbtn cog"
+          onClick={() => void openSettings()}
+          aria-label="settings"
+          title="settings"
+        >
+          <svg viewBox="0 0 20 20" width="17" height="17" aria-hidden="true">
+            <g
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              filter="url(#chalk-rough)"
+            >
+              <circle cx="10" cy="10" r="3.1" />
+              <path d="M10 2.4v2.5M10 15.1v2.5M2.4 10h2.5M15.1 10h2.5M4.6 4.6l1.8 1.8M13.6 13.6l1.8 1.8M15.4 4.6l-1.8 1.8M6.4 13.6l-1.8 1.8" />
+            </g>
+          </svg>
         </button>
         <WindowControls />
       </header>
