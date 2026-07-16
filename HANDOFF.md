@@ -385,21 +385,33 @@ Concise pickup list for the next agent (codex):
    talk, meta questions — tripwire, not conversation police). Verified:
    engine+server tsc, web build, fake-client e2e (direct template used,
    gate never called, reveal unlock mutates locked set).
-13. **SPECS READY, NOT BUILT (2026-07-16 afternoon):** two ingest-quality
-   findings + two specs, in priority order:
-   (a) `.agent-tasks/lc-oracle.md` — BUG: `getOrIngestCard` ignores
-   `verification.ok` (caches unverified cards; two poisoned cards shipped
-   to the user's %APPDATA% on 07-16: climbing-stairs had reasoning-babble
-   leaked into example outputs by the ingest model; min-cost-climbing-stairs
-   had a hallucinated expected value `0` for `[0,0,1,1]`, correct `1`, which
-   verifyCard caught and the server discarded). Spec = wire the gate + LC
-   login window (Electron `persist:leetcode` partition, cookie harvest, no
-   paste) + LC interpret_solution as a true oracle for example outputs at
-   ingest. User must delete the two bad local cards or hand-fix them.
-   (b) `.agent-tasks/tutor-artifacts.md` — tutor-authored standalone HTML
-   walkthrough docs (Tailwind CDN, chalk aesthetic), new `ARTIFACT:` control
-   line beside gestures, second authoring LLM call, gate-checked per mode,
-   stored under dataDir/artifacts, margin chip opens via shell.openPath.
+13. **LC ORACLE + TUTOR ARTIFACTS: SHIPPED (2026-07-16, codex exec
+   implementers — gpt-5.6-luna and gpt-5.6-terra — spec'd/reviewed/verified
+   by Claude).**
+   (a) LC oracle (spec `.agent-tasks/lc-oracle.md`): the ignored
+   `verification.ok` gate is WIRED — getOrIngestCard now verifies AFTER
+   LC-oracle correction and throws on failure (no cache write). Background:
+   two poisoned cards shipped to %APPDATA% on 07-16 (climbing-stairs:
+   reasoning-babble in example outputs; min-cost-climbing-stairs:
+   hallucinated `0` for `[0,0,1,1]`, correct `1`). USER STILL NEEDS TO
+   delete/fix those two local card files. LC login = Electron
+   `persist:leetcode` window with eager cookie harvest (lc:login/lc:logout
+   IPC, paste fallback in browser mode); cookies live server-side only
+   (GET /api/settings exposes only signedIn). Oracle =
+   engine/src/lcOracle.ts (interpret_solution → poll → expected_code_answer
+   → python literal). NOT yet live-tested against real LC — first real
+   ingest after sign-in is the live test. Follow-ups deliberately cut:
+   submit-to-LC verdict, stress-case oracle.
+   (b) Tutor artifacts (spec `.agent-tasks/tutor-artifacts.md`): `ARTIFACT:
+   <concept>` control line beside gestures (parser: up to two control lines
+   after MODE), second authoring call on prompts/artifact_tmpl.md (single
+   HTML file, Tailwind CDN only, chalk handout look), gate-checked
+   (tag-stripped text) in gated modes / ungated in direct, stored under
+   dataDir/artifacts with traversal-guarded GET + note-reference check,
+   guarded notes.artifact column migration, 📄 chip → shell.openPath
+   (desktop) or served URL (browser). NOT yet manually exercised in the
+   running app (subagent sandbox couldn't open a browser) — needs one live
+   turn + chip click.
    Also relevant context: codex silent-stall diagnosis (07-16) — ingest
    failures were codex 0.144.1 streams going quiet mid-reasoning; the
    120s inactivity watchdog killed them; resolved after 0.144.5 update.
