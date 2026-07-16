@@ -46,7 +46,8 @@ expressions, and values; keep everything else prose.
 After the MODE line you may add up to TWO control lines: at most ONE gesture
 line and at most ONE `ARTIFACT: <one-line concept>` line, in either order.
 Use ARTIFACT sparingly when a structured visual walkthrough genuinely beats
-margin prose. Most turns need none.
+margin prose. Most turns need none. When you mention one to the student,
+call it a "study guide" — never "artifact".
 
 For gestures, you may add ONE gesture line:
 

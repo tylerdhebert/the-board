@@ -29,22 +29,53 @@
   align-items: baseline;
   gap: 10px;
 }
-/* session artifact shelf — count button + popover, so walkthroughs stay
-   reachable while the conversation moves on */
+/* the tagline yields (ellipsizes) so the study-guides chip always fits */
+.margin-head .m2 {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* study guides shelf — chalk chip + popover, so guides stay reachable while
+   the conversation moves on */
 .margin-artifacts {
+  position: relative;
   margin-left: auto;
   background: transparent;
   border: 0;
-  padding: 2px 4px;
+  padding: 3px 10px 4px;
   font-family: var(--mono);
-  font-size: 11.5px;
-  letter-spacing: 0.06em;
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
   color: var(--chalk-dim);
   cursor: pointer;
   flex: 0 0 auto;
+  transform: rotate(-0.8deg);
+}
+.margin-artifacts::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1.5px solid var(--chalk-faint);
+  filter: url(#chalk-rough);
+  pointer-events: none;
+  opacity: 0.75;
+}
+.margin-artifacts b {
+  font-weight: 700;
+  color: var(--amber);
 }
 .margin-artifacts:hover,
-.margin-artifacts[aria-expanded='true'] { color: var(--amber); }
+.margin-artifacts[aria-expanded='true'] {
+  color: var(--chalk);
+}
+.margin-artifacts:hover::before,
+.margin-artifacts[aria-expanded='true']::before {
+  border-color: rgba(240, 195, 74, 0.6);
+  opacity: 1;
+}
 .artifact-pop {
   position: absolute;
   top: calc(100% - 4px);
@@ -55,6 +86,14 @@
   background: var(--slate-raise);
   padding: 6px 0;
   box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45);
+}
+.artifact-pop-eyebrow {
+  margin: 4px 12px 6px;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--chalk-faint);
 }
 .artifact-pop::before {
   content: '';

@@ -140,7 +140,8 @@ line and at most ONE `ARTIFACT: <one-line concept>` line, in either order.
 Use ARTIFACT sparingly, when a structured visual walkthrough genuinely beats
 margin prose — typically in analog or scaffold, sometimes direct, and only
 occasionally socratic. Most turns need none. Socratic artifacts obey the same
-leak budget as prose.
+leak budget as prose. When you mention one to the student, call it a "study
+guide" ("let me write you up a study guide") — never "artifact".
 
 For gestures, you may add ONE gesture line:
 

@@ -1425,14 +1425,15 @@ export default function App() {
                 type="button"
                 className="margin-artifacts"
                 aria-expanded={artifactsOpen}
-                title="walkthroughs from this session"
+                title="study guides from this session"
                 onClick={() => setArtifactsOpen((v) => !v)}
               >
-                📄 {sessionArtifacts.length}
+                📄 study guides <b>{sessionArtifacts.length}</b>
               </button>
             )}
             {artifactsOpen && sessionArtifacts.length > 0 && (
               <div className="artifact-pop" role="menu">
+                <p className="artifact-pop-eyebrow">study guides · this session</p>
                 {sessionArtifacts.map((a, i) => (
                   <button
                     key={`${a.file}${i}`}
@@ -1559,6 +1560,7 @@ export default function App() {
                   <button
                     type="button"
                     className="artifact-chip"
+                    title="open the study guide"
                     onClick={() => openArtifact(n.artifact!)}
                   >
                     <span>📄 {n.artifact.title}</span>
