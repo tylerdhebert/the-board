@@ -114,6 +114,7 @@ export default function App() {
   const [settingsSaving, setSettingsSaving] = useState(false)
   const [marginWidth, setMarginWidth] = useState(readStoredMarginWidth)
   const [problemWidth, setProblemWidth] = useState(readStoredProblemWidth)
+  const [artifactsOpen, setArtifactsOpen] = useState(false)
   const [composerHeight, setComposerHeight] = useState(COMPOSER_MIN_PX)
   const [composerManual, setComposerManual] = useState(false)
   const deskRef = useRef<HTMLElement>(null)
@@ -279,6 +280,15 @@ export default function App() {
     handle.addEventListener('pointermove', onMove)
     handle.addEventListener('pointerup', onUp)
     handle.addEventListener('pointercancel', onUp)
+  }
+
+  function openArtifact(artifact: { file: string; url?: string }) {
+    if (!sessionId) return
+    if (window.tutorDesktop) {
+      void window.tutorDesktop.openArtifact(sessionId, artifact.file)
+    } else {
+      window.open(artifact.url ?? `/api/artifacts/${sessionId}/${artifact.file}`)
+    }
   }
 
   function deskWidth(): number {
@@ -864,6 +874,29 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [vocabOpen])
 
+  // Artifact shelf closes on Escape, outside click, or leaving the session.
+  useEffect(() => {
+    setArtifactsOpen(false)
+  }, [sessionId])
+  useEffect(() => {
+    if (!artifactsOpen) return
+    function onKey(e: globalThis.KeyboardEvent) {
+      if (e.key === 'Escape') setArtifactsOpen(false)
+    }
+    function onDown(e: globalThis.PointerEvent) {
+      const t = e.target as HTMLElement | null
+      if (!t?.closest('.artifact-pop') && !t?.closest('.margin-artifacts')) {
+        setArtifactsOpen(false)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    document.addEventListener('pointerdown', onDown)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.removeEventListener('pointerdown', onDown)
+    }
+  }, [artifactsOpen])
+
   const marginMax = clampMarginWidth(
     typeof window !== 'undefined' ? window.innerWidth * 0.5 : marginWidth,
   )
@@ -872,6 +905,8 @@ export default function App() {
 
   const showVocab =
     vocab != null && (vocab.lockedCount > 0 || vocab.earned.length > 0)
+
+  const sessionArtifacts = notes.flatMap((n) => (n.artifact ? [n.artifact] : []))
 
   return (
     <div
@@ -1313,6 +1348,35 @@ export default function App() {
           <div className="margin-head">
             <span className="m1">the tutor</span>
             <span className="m2">in the margin</span>
+            {sessionArtifacts.length > 0 && (
+              <button
+                type="button"
+                className="margin-artifacts"
+                aria-expanded={artifactsOpen}
+                title="walkthroughs from this session"
+                onClick={() => setArtifactsOpen((v) => !v)}
+              >
+                📄 {sessionArtifacts.length}
+              </button>
+            )}
+            {artifactsOpen && sessionArtifacts.length > 0 && (
+              <div className="artifact-pop" role="menu">
+                {sessionArtifacts.map((a, i) => (
+                  <button
+                    key={`${a.file}${i}`}
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      openArtifact(a)
+                      setArtifactsOpen(false)
+                    }}
+                  >
+                    <span>{a.title}</span>
+                    <small>{a.file}</small>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="notes" ref={notesRef}>
@@ -1415,14 +1479,7 @@ export default function App() {
                   <button
                     type="button"
                     className="artifact-chip"
-                    onClick={() => {
-                      if (!sessionId) return
-                      if (window.tutorDesktop) {
-                        void window.tutorDesktop.openArtifact(sessionId, n.artifact!.file)
-                      } else {
-                        window.open(n.artifact!.url ?? `/api/artifacts/${sessionId}/${n.artifact!.file}`)
-                      }
-                    }}
+                    onClick={() => openArtifact(n.artifact!)}
                   >
                     <span>📄 {n.artifact.title}</span>
                     <small>{n.artifact.file}</small>
