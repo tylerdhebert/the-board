@@ -10,12 +10,16 @@ export type Note = {
   unlocked?: string[]
   redrafted?: boolean
   revealing?: boolean
-  /** Stashed from turn; validated/activated after reveal (ephemeral). */
+  /** Accepted gesture carried with the tutor note; live effects remain ephemeral. */
   gesture?: TeacherGesture
-  /** Ephemeral fill-ins for scaffold ____ holes (not persisted). */
+  /** Saved fill-ins for scaffold ____ holes. */
   blanks?: string[]
   sentBack?: boolean
   artifact?: { title: string; file: string; url?: string }
+  /** Hydrated from a save — render settled, replay no arrival animations. */
+  restored?: boolean
+  /** SHOW card expanded in the chat (ephemeral display state). */
+  cardOpen?: boolean
 }
 
 export type CardState = {

@@ -33,8 +33,8 @@ function migrateFromJsonFiles(database: DatabaseSync): void {
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const insertNote = database.prepare(`
-    INSERT INTO notes (session_id, seq, role, text, mode, unlocked, redrafted, artifact)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO notes (session_id, seq, role, text, mode, unlocked, redrafted, artifact, gesture, blanks, sent_back)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   let migrated = 0;
@@ -74,6 +74,9 @@ function migrateFromJsonFiles(database: DatabaseSync): void {
           n.unlocked == null ? null : JSON.stringify(n.unlocked),
           n.redrafted == null ? null : n.redrafted ? 1 : 0,
           n.artifact == null ? null : JSON.stringify(n.artifact),
+          n.gesture == null ? null : JSON.stringify(n.gesture),
+          n.blanks == null ? null : JSON.stringify(n.blanks),
+          n.sentBack == null ? null : n.sentBack ? 1 : 0,
         );
       }
       migrated++;
@@ -117,6 +120,9 @@ export function getDb(): DatabaseSync {
       unlocked TEXT,
       redrafted INTEGER,
       artifact TEXT,
+      gesture TEXT,
+      blanks TEXT,
+      sent_back INTEGER,
       PRIMARY KEY (session_id, seq)
     );
     CREATE TABLE IF NOT EXISTS takes (
@@ -137,6 +143,15 @@ export function getDb(): DatabaseSync {
   const noteColumns = database.prepare('PRAGMA table_info(notes)').all() as { name: string }[];
   if (!noteColumns.some((column) => column.name === 'artifact')) {
     database.exec('ALTER TABLE notes ADD COLUMN artifact TEXT');
+  }
+  if (!noteColumns.some((column) => column.name === 'gesture')) {
+    database.exec('ALTER TABLE notes ADD COLUMN gesture TEXT');
+  }
+  if (!noteColumns.some((column) => column.name === 'blanks')) {
+    database.exec('ALTER TABLE notes ADD COLUMN blanks TEXT');
+  }
+  if (!noteColumns.some((column) => column.name === 'sent_back')) {
+    database.exec('ALTER TABLE notes ADD COLUMN sent_back INTEGER');
   }
   migrateFromJsonFiles(database);
   db = database;

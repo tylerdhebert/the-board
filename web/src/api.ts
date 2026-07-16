@@ -50,6 +50,9 @@ export interface PersistedNote {
   unlocked?: string[]
   redrafted?: boolean
   artifact?: { title: string; file: string }
+  gesture?: TeacherGesture
+  blanks?: string[]
+  sentBack?: boolean
 }
 
 export type RunCaseResult = {
@@ -276,6 +279,19 @@ export async function getSettings(): Promise<{
   }>('/api/settings')
 }
 
+export type NoteState = { blanks?: string[]; sentBack?: boolean }
+
+export async function patchNoteState(
+  sessionId: string,
+  seq: number,
+  state: NoteState,
+): Promise<void> {
+  await request<void>(`/api/session/${sessionId}/note/${seq}`, {
+    method: 'PATCH',
+    body: JSON.stringify(state),
+  })
+}
+
 export async function putSettings(models: AppSettingsModels): Promise<void> {
   const res = await fetch('/api/settings', {
     method: 'PUT',
@@ -304,3 +320,4 @@ export async function putLeetCodeSettings(input: {
     body: JSON.stringify(input),
   })
 }
+import type { TeacherGesture } from './appTypes'

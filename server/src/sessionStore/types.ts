@@ -1,5 +1,10 @@
 import type { Message, StudentRunResult } from '../engine.js';
 
+export type PersistedTeacherGesture =
+  | { kind: 'point'; line: number; endLine?: number; quote: string }
+  | { kind: 'show'; caseNumber: number }
+  | { kind: 'tap' };
+
 export type PersistedNote = {
   role: 'student' | 'tutor';
   text: string;
@@ -7,6 +12,9 @@ export type PersistedNote = {
   unlocked?: string[];
   redrafted?: boolean;
   artifact?: { title: string; file: string };
+  gesture?: PersistedTeacherGesture;
+  blanks?: string[];
+  sentBack?: boolean;
 };
 
 export type PersistedTake = {
@@ -56,6 +64,9 @@ export type NoteRow = {
   unlocked: string | null;
   redrafted: number | null;
   artifact: string | null;
+  gesture: string | null;
+  blanks: string | null;
+  sent_back: number | null;
 };
 
 export type TakeRow = {

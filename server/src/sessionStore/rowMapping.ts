@@ -43,6 +43,11 @@ export function noteFromRow(row: NoteRow): PersistedNote {
   if (row.unlocked != null) note.unlocked = JSON.parse(row.unlocked) as string[];
   if (row.redrafted != null) note.redrafted = row.redrafted !== 0;
   if (row.artifact != null) note.artifact = JSON.parse(row.artifact) as { title: string; file: string };
+  if (row.gesture != null) {
+    note.gesture = JSON.parse(row.gesture) as NonNullable<PersistedNote['gesture']>;
+  }
+  if (row.blanks != null) note.blanks = JSON.parse(row.blanks) as string[];
+  if (row.sent_back != null) note.sentBack = row.sent_back !== 0;
   return note;
 }
 

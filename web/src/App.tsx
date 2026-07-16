@@ -14,6 +14,7 @@ import {
   getProblems,
   getSession,
   getSettings,
+  patchNoteState,
   putSettings,
   runExamples,
   saveEditor,
@@ -121,6 +122,8 @@ export default function App() {
   const notesRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const editorSaveRef = useRef<Promise<void>>(Promise.resolve())
+  const noteStateTimersRef = useRef<Map<string, number>>(new Map())
+  const noteStateSavesRef = useRef<Map<string, Promise<void>>>(new Map())
   const savedLangRef = useRef(lang)
   const codeRef = useRef(code)
   codeRef.current = code
@@ -138,6 +141,13 @@ export default function App() {
   useEffect(() => {
     refreshProblems()
   }, [])
+
+  useEffect(() => {
+    return () => {
+      for (const timer of noteStateTimersRef.current.values()) window.clearTimeout(timer)
+      noteStateTimersRef.current.clear()
+    }
+  }, [sessionId])
 
   useEffect(() => {
     if (!figureView) return
@@ -397,6 +407,60 @@ export default function App() {
     return queued
   }
 
+  function noteStateKey(id: string, seq: number) {
+    return `${id}:${seq}`
+  }
+
+  function persistNoteState(
+    id: string,
+    seq: number,
+    state: { blanks?: string[]; sentBack?: boolean },
+  ): Promise<void> {
+    const key = noteStateKey(id, seq)
+    const previous = noteStateSavesRef.current.get(key) ?? Promise.resolve()
+    const next = previous
+      .catch(() => {})
+      .then(() => patchNoteState(id, seq, state))
+      .catch((err) => {
+        console.warn('failed to save note display state', err)
+      })
+    noteStateSavesRef.current.set(key, next)
+    return next
+  }
+
+  function queueNoteStateWrite(
+    noteIndex: number,
+    state: { blanks?: string[]; sentBack?: boolean },
+  ) {
+    if (!sessionId) return
+    const id = sessionId
+    const key = noteStateKey(id, noteIndex)
+    const existing = noteStateTimersRef.current.get(key)
+    if (existing != null) window.clearTimeout(existing)
+    noteStateTimersRef.current.set(
+      key,
+      window.setTimeout(() => {
+        noteStateTimersRef.current.delete(key)
+        void persistNoteState(id, noteIndex, state)
+      }, 600),
+    )
+  }
+
+  function flushNoteState(
+    noteIndex: number,
+    state: { blanks?: string[]; sentBack?: boolean },
+  ) {
+    if (!sessionId) return
+    const id = sessionId
+    const key = noteStateKey(id, noteIndex)
+    const existing = noteStateTimersRef.current.get(key)
+    if (existing != null) {
+      window.clearTimeout(existing)
+      noteStateTimersRef.current.delete(key)
+    }
+    void persistNoteState(id, noteIndex, state)
+  }
+
   // Debounced editor sync while a session is active.
   useEffect(() => {
     if (!sessionId) return
@@ -522,6 +586,10 @@ export default function App() {
           unlocked: n.unlocked,
           redrafted: n.redrafted,
           artifact: n.artifact,
+          gesture: n.gesture,
+          blanks: n.blanks,
+          sentBack: n.sentBack,
+          restored: true,
           revealing: false,
         })),
       )
@@ -718,10 +786,11 @@ export default function App() {
     const note = notes[noteIndex]
     if (!note || note.sentBack || busy) return
     if (!hasScaffoldBlanks(note.mode, note.text)) return
-    const values = note.blanks ?? []
+    const values = [...(note.blanks ?? [])]
     if (blanksAllEmpty(note.text, values)) return
     const filled = composeFilledScaffold(note.text, values)
     setNotes((p) => p.map((n, i) => (i === noteIndex ? { ...n, sentBack: true } : n)))
+    flushNoteState(noteIndex, { blanks: values, sentBack: true })
     void turn(
       'Here is your scaffold with my blanks filled in:\n\n' + filled,
       '↳ sent the scaffold back',
@@ -729,14 +798,17 @@ export default function App() {
   }
 
   function setBlankValue(noteIndex: number, blankIndex: number, value: string) {
+    const note = notes[noteIndex]
+    if (!note) return
+    const blanks = [...(note.blanks ?? [])]
+    blanks[blankIndex] = value
     setNotes((p) =>
       p.map((n, i) => {
         if (i !== noteIndex) return n
-        const blanks = [...(n.blanks ?? [])]
-        blanks[blankIndex] = value
         return { ...n, blanks }
       }),
     )
+    queueNoteStateWrite(noteIndex, { blanks })
   }
 
   async function runTheExamples() {
@@ -1453,11 +1525,19 @@ export default function App() {
                   const c = showCardAt(g.caseNumber)
                   if (!c) return null
                   return (
-                    <div className="note-card-wrap">
-                      <div
+                    <div className={`note-card-wrap${n.restored ? ' settled' : ''}`}>
+                      <button
+                        type="button"
                         className={`index-card note-card${c.tougher ? ' tougher' : ''}${
                           c.pass === true ? ' pass' : c.pass === false ? ' fail' : ''
-                        }`}
+                        }${n.cardOpen ? ' open' : ''}`}
+                        aria-pressed={Boolean(n.cardOpen)}
+                        title={n.cardOpen ? 'shrink the card' : 'expand the card'}
+                        onClick={() =>
+                          setNotes((p) =>
+                            p.map((x, j) => (j === i ? { ...x, cardOpen: !x.cardOpen } : x)),
+                          )
+                        }
                       >
                         <div className="card-head">{c.input}</div>
                         <div className="card-line">
@@ -1471,7 +1551,7 @@ export default function App() {
                         {c.error && <div className="card-line err">{c.error}</div>}
                         {c.pass === true && <span className="card-stamp ok">✓</span>}
                         {c.pass === false && <span className="card-stamp no">✗</span>}
-                      </div>
+                      </button>
                     </div>
                   )
                 })()}

@@ -232,6 +232,8 @@
   margin-top: 10px;
   animation: card-drag-in 350ms ease-out both;
 }
+/* save-file rule: hydrated cards are already on the table — no re-deal */
+.note-card-wrap.settled { animation: none; }
 @keyframes card-drag-in {
   from {
     transform: translate(-46px, 10px) rotate(-7deg);
@@ -245,6 +247,23 @@
   transform: rotate(-1.2deg);
   position: relative;
   overflow: hidden;
+  /* it's a button now (click to expand) — keep the paper look */
+  display: block;
+  border: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.note-card.open {
+  width: 100%;
+  min-height: 0;
+  transform: none;
+  overflow: visible;
+}
+.note-card.open .card-head,
+.note-card.open .card-line {
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 .note-card.tougher {
   box-shadow:

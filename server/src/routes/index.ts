@@ -11,6 +11,7 @@ import { tryServeStatic } from './static.js';
 import { handleStress } from './stress.js';
 import { handleSubmit } from './submit.js';
 import { handleArtifact } from './artifacts.js';
+import { handleNoteState } from './noteState.js';
 import { CORS, sendJson } from './http.js';
 
 export async function handle(
@@ -32,6 +33,7 @@ export async function handle(
   if (await handleLspInfo(method, pathname, url, res)) return;
   if (await handleSettings(method, pathname, req, res)) return;
   if (await handleCreateSession(method, pathname, req, res, deps)) return;
+  if (await handleNoteState(method, pathname, req, res)) return;
   if (await handleEditor(method, pathname, req, res)) return;
   if (await handleStress(method, pathname, res)) return;
   if (await handleRun(method, pathname, req, res)) return;

@@ -71,6 +71,7 @@ export async function handleSubmit(
       mode: result.mode,
       unlocked: result.unlockedThisTurn,
       redrafted: result.redrafted,
+      ...(result.gesture ? { gesture: result.gesture } : {}),
       ...(storedArtifact ? { artifact: { title: storedArtifact.title, file: storedArtifact.file } } : {}),
     });
     // Reply first, persist after — a disk-write failure must never eat a

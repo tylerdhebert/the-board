@@ -68,8 +68,8 @@ export async function saveSession(s: PersistedSession): Promise<void> {
 
     database.prepare('DELETE FROM notes WHERE session_id = ?').run(s.id);
     const insertNote = database.prepare(`
-      INSERT INTO notes (session_id, seq, role, text, mode, unlocked, redrafted, artifact)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO notes (session_id, seq, role, text, mode, unlocked, redrafted, artifact, gesture, blanks, sent_back)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     for (let i = 0; i < s.notes.length; i++) {
       const n = s.notes[i]!;
@@ -82,6 +82,9 @@ export async function saveSession(s: PersistedSession): Promise<void> {
         n.unlocked == null ? null : JSON.stringify(n.unlocked),
         n.redrafted == null ? null : n.redrafted ? 1 : 0,
         n.artifact == null ? null : JSON.stringify(n.artifact),
+        n.gesture == null ? null : JSON.stringify(n.gesture),
+        n.blanks == null ? null : JSON.stringify(n.blanks),
+        n.sentBack == null ? null : n.sentBack ? 1 : 0,
       );
     }
 

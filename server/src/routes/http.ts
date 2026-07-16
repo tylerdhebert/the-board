@@ -2,7 +2,7 @@ import type http from 'node:http';
 
 export const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, GET, PUT, OPTIONS',
+  'Access-Control-Allow-Methods': 'POST, GET, PUT, PATCH, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
