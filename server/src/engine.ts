@@ -12,12 +12,14 @@ import {
   type ProblemCard,
   type SessionModels,
 } from '../../engine/src/index.js';
-import { ingest } from '../../engine/src/ingest.js';
+import { ingest, verifyCard } from '../../engine/src/ingest.js';
 import { inlineFigures, stripFigureRefs } from '../../engine/src/leetcode.js';
+import { oracleExpectedOutputs } from '../../engine/src/lcOracle.js';
 import { extractCases, type CaseSpec } from '../../engine/src/exampleCases.js';
 import { runStudentCode, type StudentRunResult } from '../../engine/src/runStudentCode.js';
 import { generateStressCases } from '../../engine/src/stressCases.js';
 import { appPaths } from './appPaths.js';
+import { loadLeetCodeAuth } from './leetcodeAuth.js';
 
 export { TutorSession, extractCases, runStudentCode, JsonlTracer, createClient, generateStressCases };
 export type { CodeSnippet, Message, ProblemCard, SessionModels, CaseSpec, StudentRunResult };
@@ -84,6 +86,54 @@ async function readSnippets(filePath: string): Promise<CodeSnippet[]> {
   }
 }
 
+async function applyLeetCodeOracle(
+  card: ProblemCard,
+  problem: Awaited<ReturnType<typeof fetchProblem>>,
+): Promise<void> {
+  const auth = await loadLeetCodeAuth();
+  if (!auth || card.judge || card.examples.length === 0) return;
+
+  let cases;
+  try {
+    cases = await extractCases(card.examples);
+  } catch {
+    // Non-literal or malformed examples are outside the oracle's input contract.
+    return;
+  }
+
+  const pythonSnippet = problem.codeSnippets.find((snippet) => snippet.langSlug === 'python3')?.code;
+  if (!pythonSnippet) {
+    console.warn(`[lc oracle] skipped ${problem.slug}: no python3 starter snippet`);
+    return;
+  }
+
+  try {
+    const outputs = await oracleExpectedOutputs(
+      auth,
+      problem.slug,
+      problem.questionId,
+      pythonSnippet,
+      cases.map((item) => item.args.map((arg) => JSON.stringify(arg))),
+    );
+    if (outputs.length !== card.examples.length) {
+      throw new Error(`expected ${card.examples.length} outputs, received ${outputs.length}`);
+    }
+    outputs.forEach((output, index) => {
+      const example = card.examples[index]!;
+      if (example.output !== output) {
+        console.log(
+          `[lc oracle] corrected ${problem.slug} example ${index + 1}: ` +
+            `${example.output} -> ${output}`,
+        );
+        example.output = output;
+      }
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(`[lc oracle] fallback for ${problem.slug}: ${message}`);
+  }
+}
+
 /** Starter scaffolds for a built-in card (by name), if any were cached. */
 export async function loadSnippets(name: string): Promise<CodeSnippet[]> {
   assertSafeCardName(name);
@@ -119,9 +169,10 @@ export async function getOrIngestCard(
 
   const model = opts?.model ?? 'gpt-5.5';
   const client = opts?.client ?? createClient('codex');
-  const { card, verification } = await ingest(client, stripFigureRefs(problem.statement), model, {
+  const { card } = await ingest(client, stripFigureRefs(problem.statement), model, {
     metaData: problem.metaData,
   });
+  await applyLeetCodeOracle(card, problem);
   card.difficulty = problem.difficulty;
   // Trusted-source-wins (same move as judge): the verbatim LC markdown replaces
   // the LLM's retelling of the statement/constraints.
@@ -130,6 +181,15 @@ export async function getOrIngestCard(
   if (problem.constraintsMd) card.constraints = problem.constraintsMd;
   card.url = problem.url;
   if (figures.length > 0) card.figures = figures;
+  const verification = await verifyCard(card);
+  if (!verification.ok) {
+    const failing = verification.cases
+      .filter((item) => !item.pass)
+      .map((item) => `${item.input}: expected ${item.expected}, got ${item.got}`)
+      .join('; ');
+    const detail = verification.error ?? (failing || 'one or more verification cases failed');
+    throw new Error(`ingest verification failed: ${detail}`);
+  }
   await writeFile(cachePath, JSON.stringify(card, null, 2) + '\n', 'utf8');
   await writeFile(snippetsPath, JSON.stringify(problem.codeSnippets, null, 2) + '\n', 'utf8');
   return { card, verified: verification.ok, cached: false, snippets: problem.codeSnippets };

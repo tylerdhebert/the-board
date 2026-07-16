@@ -22,6 +22,10 @@ export async function setSetting(key: string, value: string): Promise<void> {
     .run(key, value);
 }
 
+export async function deleteSetting(key: string): Promise<void> {
+  getDb().prepare('DELETE FROM settings WHERE key = ?').run(key);
+}
+
 export async function saveSession(s: PersistedSession): Promise<void> {
   const database = getDb();
   database.exec('BEGIN');

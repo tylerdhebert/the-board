@@ -21,4 +21,10 @@ contextBridge.exposeInMainWorld('tutorDesktop', {
   captureShot(opts) {
     return ipcRenderer.invoke('debug:capture', opts ?? {})
   },
+  lcLogin() {
+    return ipcRenderer.invoke('lc:login')
+  },
+  lcLogout() {
+    return ipcRenderer.invoke('lc:logout')
+  },
 })

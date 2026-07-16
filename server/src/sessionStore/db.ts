@@ -136,3 +136,8 @@ export function getDb(): DatabaseSync {
   db = database;
   return database;
 }
+
+export function closeDb(): void {
+  db?.close();
+  db = null;
+}

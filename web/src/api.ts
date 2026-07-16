@@ -265,8 +265,13 @@ export type AppSettingsModels = {
 export async function getSettings(): Promise<{
   models: AppSettingsModels
   backends: string[]
+  leetcode: { signedIn: boolean }
 }> {
-  return request<{ models: AppSettingsModels; backends: string[] }>('/api/settings')
+  return request<{
+    models: AppSettingsModels
+    backends: string[]
+    leetcode: { signedIn: boolean }
+  }>('/api/settings')
 }
 
 export async function putSettings(models: AppSettingsModels): Promise<void> {
@@ -286,4 +291,14 @@ export async function putSettings(models: AppSettingsModels): Promise<void> {
     }
     throw new Error(message)
   }
+}
+
+export async function putLeetCodeSettings(input: {
+  session: string
+  csrf: string
+} | { clear: true }): Promise<void> {
+  await request<void>('/api/settings/leetcode', {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  })
 }

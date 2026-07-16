@@ -9,6 +9,7 @@ export interface CodeSnippet {
 export interface LeetCodeProblem {
   title: string;
   slug: string;
+  questionId: string;
   difficulty: string;
   url: string; // canonical problem page, for the submit link
   contentHtml: string; // raw HTML from LeetCode
@@ -241,7 +242,7 @@ export async function fetchProblem(input: string): Promise<LeetCodeProblem> {
     },
     body: JSON.stringify({
       query:
-        'query q($titleSlug: String!){ question(titleSlug:$titleSlug){ title titleSlug difficulty content metaData codeSnippets { lang langSlug code } } }',
+        'query q($titleSlug: String!){ question(titleSlug:$titleSlug){ questionId title titleSlug difficulty content metaData codeSnippets { lang langSlug code } } }',
       variables: { titleSlug: slug },
     }),
   });
@@ -251,6 +252,7 @@ export async function fetchProblem(input: string): Promise<LeetCodeProblem> {
   const json = (await res.json()) as {
     data?: {
       question: null | {
+        questionId: string;
         title: string;
         titleSlug: string;
         difficulty: string;
@@ -275,6 +277,7 @@ export async function fetchProblem(input: string): Promise<LeetCodeProblem> {
   return {
     title: question.title,
     slug: question.titleSlug,
+    questionId: question.questionId,
     difficulty: question.difficulty,
     url: `https://leetcode.com/problems/${question.titleSlug}/`,
     contentHtml: question.content,

@@ -6,5 +6,6 @@ export * from './gate.js';
 export * from './unlockJudge.js';
 export * from './session.js';
 export * from './leetcode.js';
+export * from './lcOracle.js';
 export * from './trace.js';
 export * from './providers.js';

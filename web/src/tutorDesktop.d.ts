@@ -8,6 +8,8 @@ export type TutorDesktopBridge = {
     name?: string
     outDir?: string
   }) => Promise<{ path: string; sha256: string }>
+  lcLogin: () => Promise<{ signedIn: boolean }>
+  lcLogout: () => Promise<{ signedIn: boolean }>
 }
 
 declare global {

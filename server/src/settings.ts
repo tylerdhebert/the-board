@@ -1,5 +1,11 @@
 import { DEFAULT_MODELS } from './engine.js';
 import { getSetting, setSetting } from './sessionStore.js';
+export {
+  clearLeetCodeAuth,
+  loadLeetCodeAuth,
+  saveLeetCodeAuth,
+} from './leetcodeAuth.js';
+export type { LeetCodeAuth } from '../../engine/src/lcOracle.js';
 
 export type RoleModels = { backend: string; model: string };
 export type AppSettings = {

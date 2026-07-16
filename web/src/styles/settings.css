@@ -67,6 +67,46 @@
   margin: 16px 0 0;
   line-height: 1.5;
 }
+.settings-divider {
+  border-top: 1px solid rgba(232, 238, 227, 0.16);
+  margin: 22px 0 16px;
+}
+.settings-provider-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.settings-status {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--chalk-faint);
+}
+.settings-link {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--amber);
+  color: var(--amber);
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 4px 0 3px;
+  cursor: pointer;
+}
+.settings-link:disabled { color: var(--chalk-faint); border-bottom-color: transparent; cursor: default; }
+.settings-cookie-form { display: grid; gap: 10px; }
+.settings-cookie-form input {
+  width: 100%;
+  box-sizing: border-box;
+  background: transparent;
+  border: 0;
+  border-bottom: 1.5px solid var(--chalk-faint);
+  color: var(--chalk);
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 6px 2px;
+  outline: none;
+}
+.settings-cookie-form input:focus { border-bottom-color: var(--amber); }
 .settings-error {
   font-family: var(--mono);
   font-size: 12px;

@@ -105,6 +105,7 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsModels, setSettingsModels] = useState<AppSettingsModels | null>(null)
   const [settingsBackends, setSettingsBackends] = useState<string[]>([])
+  const [settingsLeetcode, setSettingsLeetcode] = useState<boolean | null>(null)
   const [settingsError, setSettingsError] = useState<string | null>(null)
   const [settingsSaving, setSettingsSaving] = useState(false)
   const [marginWidth, setMarginWidth] = useState(readStoredMarginWidth)
@@ -149,6 +150,7 @@ export default function App() {
       const res = await getSettings()
       setSettingsModels(res.models)
       setSettingsBackends(res.backends)
+      setSettingsLeetcode(res.leetcode.signedIn)
     } catch (err) {
       setSettingsError(err instanceof Error ? err.message : String(err))
     }
@@ -158,6 +160,7 @@ export default function App() {
     setSettingsOpen(false)
     setSettingsError(null)
     setSettingsModels(null)
+    setSettingsLeetcode(null)
   }
 
   async function saveSettingsPanel() {
@@ -863,11 +866,13 @@ export default function App() {
         <SettingsPanel
           settingsModels={settingsModels}
           settingsBackends={settingsBackends}
+          settingsLeetcode={settingsLeetcode}
           settingsError={settingsError}
           settingsSaving={settingsSaving}
           onClose={closeSettings}
           onSave={() => void saveSettingsPanel()}
           patchRole={patchRole}
+          onLeetcodeChanged={setSettingsLeetcode}
         />
       )}
 

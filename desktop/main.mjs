@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, screen, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, screen, session, shell } from 'electron'
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
@@ -48,6 +48,9 @@ let lastNormal = { ...DEFAULT_BOUNDS }
 /** @type {import('node:child_process').ChildProcess | null} */
 let apiChild = null
 let apiStderr = []
+let apiPort = null
+let lcLoginWindow = null
+let lcLoginPromise = null
 let shuttingDown = false
 
 function pad2(n) {
@@ -157,6 +160,91 @@ function waitForTutorReady(child, timeoutMs = 30_000) {
     child.on('exit', onExit)
   })
 }
+
+function apiBaseUrl() {
+  if (apiPort != null) return `http://127.0.0.1:${apiPort}`
+  const configured = process.env.TUTOR_API_URL?.trim()
+  if (configured) return configured.replace(/\/$/, '')
+  return `http://127.0.0.1:${process.env.SERVER_PORT ?? '8787'}`
+}
+
+async function readLeetCodeCookies(loginSession) {
+  const cookies = await loginSession.cookies.get({ domain: '.leetcode.com' })
+  const sessionCookie = cookies.find((cookie) => cookie.name === 'LEETCODE_SESSION')
+  const csrfCookie = cookies.find((cookie) => cookie.name === 'csrftoken')
+  return {
+    session: sessionCookie?.value ?? '',
+    csrf: csrfCookie?.value ?? '',
+  }
+}
+
+async function saveLeetCodeCookies(loginSession) {
+  const cookies = await readLeetCodeCookies(loginSession)
+  if (!cookies.session || !cookies.csrf) return false
+  const response = await fetch(`${apiBaseUrl()}/api/settings/leetcode`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(cookies),
+  })
+  if (!response.ok) throw new Error(`Could not save LeetCode sign-in (${response.status})`)
+  return true
+}
+
+function openLeetCodeLogin() {
+  if (lcLoginPromise) return lcLoginPromise
+  lcLoginPromise = new Promise((resolve, reject) => {
+    const loginSession = session.fromPartition('persist:leetcode')
+    const loginWindow = new BrowserWindow({
+      width: 1000,
+      height: 760,
+      autoHideMenuBar: true,
+      webPreferences: { session: loginSession },
+    })
+    lcLoginWindow = loginWindow
+
+    let settled = false
+    const finish = async () => {
+      if (settled) return
+      settled = true
+      try {
+        resolve({ signedIn: await saveLeetCodeCookies(loginSession) })
+      } catch (err) {
+        reject(err)
+      } finally {
+        lcLoginWindow = null
+        lcLoginPromise = null
+      }
+    }
+
+    loginWindow.webContents.on('did-navigate', () => {
+      void readLeetCodeCookies(loginSession)
+        .then(({ session: sessionCookie, csrf }) => {
+          if (sessionCookie && csrf && !loginWindow.isDestroyed()) loginWindow.close()
+        })
+        .catch(() => {})
+    })
+    loginWindow.on('closed', () => { void finish() })
+    loginWindow.webContents.setWindowOpenHandler(({ url }) => {
+      if (/^https?:\/\//i.test(url)) shell.openExternal(url)
+      return { action: 'deny' }
+    })
+    void loginWindow.loadURL('https://leetcode.com/accounts/login/')
+  })
+  return lcLoginPromise
+}
+
+ipcMain.handle('lc:login', () => openLeetCodeLogin())
+
+ipcMain.handle('lc:logout', async () => {
+  const response = await fetch(`${apiBaseUrl()}/api/settings/leetcode`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ clear: true }),
+  })
+  if (!response.ok) throw new Error(`Could not sign out of LeetCode (${response.status})`)
+  await session.fromPartition('persist:leetcode').clearStorageData()
+  return { signedIn: false }
+})
 
 function startPackagedApi() {
   const R = process.resourcesPath
@@ -346,8 +434,8 @@ if (gotLock) {
     try {
       let webUrl
       if (app.isPackaged) {
-        const port = await startPackagedApi()
-        webUrl = `http://127.0.0.1:${port}`
+        apiPort = await startPackagedApi()
+        webUrl = `http://127.0.0.1:${apiPort}`
       } else {
         webUrl = process.env.TUTOR_WEB_URL ?? 'http://localhost:5173'
       }

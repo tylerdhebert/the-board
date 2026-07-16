@@ -1,16 +1,20 @@
-import type { AppSettingsModels } from './api'
+import { useState } from 'react'
+import { putLeetCodeSettings, type AppSettingsModels } from './api'
 
 export default function SettingsPanel({
   settingsModels,
   settingsBackends,
+  settingsLeetcode,
   settingsError,
   settingsSaving,
   onClose,
   onSave,
   patchRole,
+  onLeetcodeChanged,
 }: {
   settingsModels: AppSettingsModels | null
   settingsBackends: string[]
+  settingsLeetcode: boolean | null
   settingsError: string | null
   settingsSaving: boolean
   onClose: () => void
@@ -19,7 +23,48 @@ export default function SettingsPanel({
     role: keyof AppSettingsModels,
     patch: Partial<AppSettingsModels[keyof AppSettingsModels]>,
   ) => void
+  onLeetcodeChanged: (signedIn: boolean) => void
 }) {
+  const inDesktop = typeof window !== 'undefined' && Boolean(window.tutorDesktop)
+  const [sessionCookie, setSessionCookie] = useState('')
+  const [csrfToken, setCsrfToken] = useState('')
+  const [leetcodeBusy, setLeetcodeBusy] = useState(false)
+  const [leetcodeError, setLeetcodeError] = useState<string | null>(null)
+
+  async function signIn() {
+    setLeetcodeBusy(true)
+    setLeetcodeError(null)
+    try {
+      if (inDesktop) {
+        const result = await window.tutorDesktop!.lcLogin()
+        onLeetcodeChanged(result.signedIn)
+      } else {
+        await putLeetCodeSettings({ session: sessionCookie, csrf: csrfToken })
+        setSessionCookie('')
+        setCsrfToken('')
+        onLeetcodeChanged(true)
+      }
+    } catch (err) {
+      setLeetcodeError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setLeetcodeBusy(false)
+    }
+  }
+
+  async function signOut() {
+    setLeetcodeBusy(true)
+    setLeetcodeError(null)
+    try {
+      if (inDesktop) await window.tutorDesktop!.lcLogout()
+      else await putLeetCodeSettings({ clear: true })
+      onLeetcodeChanged(false)
+    } catch (err) {
+      setLeetcodeError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setLeetcodeBusy(false)
+    }
+  }
+
   return (
     <div
       className="settings-backdrop"
@@ -53,6 +98,48 @@ export default function SettingsPanel({
         ) : (
           !settingsError && <p className="settings-note">loading…</p>
         )}
+        <div className="settings-divider" />
+        <div className="settings-provider-head">
+          <span className="role">leetcode</span>
+          <span className="settings-status">
+            {settingsLeetcode === null ? 'loading…' : settingsLeetcode ? 'signed in' : 'not signed in'}
+          </span>
+        </div>
+        {settingsLeetcode ? (
+          <button type="button" className="settings-link" onClick={() => void signOut()} disabled={leetcodeBusy}>
+            {leetcodeBusy ? 'signing out…' : 'sign out'}
+          </button>
+        ) : inDesktop ? (
+          <button type="button" className="settings-link" onClick={() => void signIn()} disabled={leetcodeBusy}>
+            {leetcodeBusy ? 'opening…' : 'sign in'}
+          </button>
+        ) : (
+          <div className="settings-cookie-form">
+            <input
+              value={sessionCookie}
+              onChange={(e) => setSessionCookie(e.target.value)}
+              placeholder="session cookie"
+              spellCheck={false}
+              type="password"
+            />
+            <input
+              value={csrfToken}
+              onChange={(e) => setCsrfToken(e.target.value)}
+              placeholder="csrf token"
+              spellCheck={false}
+              type="password"
+            />
+            <button
+              type="button"
+              className="settings-link"
+              onClick={() => void signIn()}
+              disabled={leetcodeBusy || !sessionCookie.trim() || !csrfToken.trim()}
+            >
+              {leetcodeBusy ? 'saving…' : 'sign in'}
+            </button>
+          </div>
+        )}
+        {leetcodeError && <p className="settings-error">{leetcodeError}</p>}
         <p className="settings-note">
           applies to new turns · the chosen cli must be on your PATH
         </p>

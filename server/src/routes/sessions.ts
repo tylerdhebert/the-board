@@ -11,11 +11,16 @@ import { loadSettings } from '../settings.js';
 import { getOrRestore, newEntry, vocabFor } from './context.js';
 import { readJsonBody, sendJson } from './http.js';
 
+export type SessionRouteDeps = {
+  getOrIngestCard?: typeof getOrIngestCard;
+};
+
 export async function handleCreateSession(
   method: string,
   pathname: string,
   req: http.IncomingMessage,
   res: http.ServerResponse,
+  deps: SessionRouteDeps = {},
 ): Promise<boolean> {
   if (method === 'POST' && pathname === '/api/session') {
     const body = (await readJsonBody(req)) as { cardName?: string };
@@ -53,7 +58,8 @@ export async function handleCreateSession(
     try {
       const settings = await loadSettings();
       const ingest = settings.models.ingest;
-      const { card, cached, snippets } = await getOrIngestCard(query, {
+      const ingestCard = deps.getOrIngestCard ?? getOrIngestCard;
+      const { card, cached, snippets } = await ingestCard(query, {
         client: createClient(ingest.backend),
         model: ingest.model,
       });
