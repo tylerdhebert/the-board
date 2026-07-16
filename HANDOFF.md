@@ -385,7 +385,25 @@ Concise pickup list for the next agent (codex):
    talk, meta questions — tripwire, not conversation police). Verified:
    engine+server tsc, web build, fake-client e2e (direct template used,
    gate never called, reveal unlock mutates locked set).
-13. **Conventions:** implementation goes to CLI subagents (implementer =
+13. **SPECS READY, NOT BUILT (2026-07-16 afternoon):** two ingest-quality
+   findings + two specs, in priority order:
+   (a) `.agent-tasks/lc-oracle.md` — BUG: `getOrIngestCard` ignores
+   `verification.ok` (caches unverified cards; two poisoned cards shipped
+   to the user's %APPDATA% on 07-16: climbing-stairs had reasoning-babble
+   leaked into example outputs by the ingest model; min-cost-climbing-stairs
+   had a hallucinated expected value `0` for `[0,0,1,1]`, correct `1`, which
+   verifyCard caught and the server discarded). Spec = wire the gate + LC
+   login window (Electron `persist:leetcode` partition, cookie harvest, no
+   paste) + LC interpret_solution as a true oracle for example outputs at
+   ingest. User must delete the two bad local cards or hand-fix them.
+   (b) `.agent-tasks/tutor-artifacts.md` — tutor-authored standalone HTML
+   walkthrough docs (Tailwind CDN, chalk aesthetic), new `ARTIFACT:` control
+   line beside gestures, second authoring LLM call, gate-checked per mode,
+   stored under dataDir/artifacts, margin chip opens via shell.openPath.
+   Also relevant context: codex silent-stall diagnosis (07-16) — ingest
+   failures were codex 0.144.1 streams going quiet mid-reasoning; the
+   120s inactivity watchdog killed them; resolved after 0.144.5 update.
+14. **Conventions:** implementation goes to CLI subagents (implementer =
    grok-4.5-xhigh via the cli-subagents skill's cursor-subagent.ps1; spec
    in `.agent-tasks/*.md`, short flag-free prompt "read X and implement it
    exactly"); orchestrator writes the spec, reviews the diff, verifies
