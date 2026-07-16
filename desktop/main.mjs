@@ -182,7 +182,11 @@ function apiBaseUrl() {
 }
 
 async function readLeetCodeCookies(loginSession) {
-  const cookies = await loginSession.cookies.get({ domain: '.leetcode.com' })
+  // URL-based matching, NOT a domain filter: csrftoken is a host-only cookie
+  // (domain=leetcode.com, no leading dot) and a '.leetcode.com' domain filter
+  // misses it, while LEETCODE_SESSION (domain=.leetcode.com) matches — so the
+  // "need both" check below failed forever. Observed live 2026-07-16.
+  const cookies = await loginSession.cookies.get({ url: 'https://leetcode.com' })
   const sessionCookie = cookies.find((cookie) => cookie.name === 'LEETCODE_SESSION')
   const csrfCookie = cookies.find((cookie) => cookie.name === 'csrftoken')
   return {
