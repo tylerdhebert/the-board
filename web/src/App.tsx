@@ -32,6 +32,7 @@ import {
   COMPOSER_MIN_PX,
   LANGS,
   MARGIN_MIN_PX,
+  PROBLEM_MIN_PX,
   RUNNABLE,
   STAGE_COPY,
 } from './appConstants'
@@ -39,13 +40,16 @@ import {
   blanksAllEmpty,
   buildCaseCards,
   clampMarginWidth,
+  clampProblemWidth,
   composeFilledScaffold,
   difficultyClass,
   hasScaffoldBlanks,
   normalizeForDirty,
   officialCases,
   persistMarginWidth,
+  persistProblemWidth,
   readStoredMarginWidth,
+  readStoredProblemWidth,
   reviewPrompt,
   snippetFor,
   stressCases,
@@ -109,6 +113,7 @@ export default function App() {
   const [settingsError, setSettingsError] = useState<string | null>(null)
   const [settingsSaving, setSettingsSaving] = useState(false)
   const [marginWidth, setMarginWidth] = useState(readStoredMarginWidth)
+  const [problemWidth, setProblemWidth] = useState(readStoredProblemWidth)
   const [composerHeight, setComposerHeight] = useState(COMPOSER_MIN_PX)
   const [composerManual, setComposerManual] = useState(false)
   const deskRef = useRef<HTMLElement>(null)
@@ -211,6 +216,23 @@ export default function App() {
     return () => window.removeEventListener('resize', onResize)
   }, [])
 
+  // Re-clamp the statement column when the desk's real width changes —
+  // window resizes AND tutor-margin drags both move the ceiling.
+  useEffect(() => {
+    function reclamp() {
+      const desk = deskRef.current
+      if (!desk) return
+      setProblemWidth((w) => {
+        const next = clampProblemWidth(w, desk.clientWidth)
+        if (next !== w) persistProblemWidth(next)
+        return next
+      })
+    }
+    reclamp()
+    window.addEventListener('resize', reclamp)
+    return () => window.removeEventListener('resize', reclamp)
+  }, [marginWidth])
+
   // Auto-grow the composer until the user has manually sized it.
   useEffect(() => {
     if (composerManual) return
@@ -257,6 +279,59 @@ export default function App() {
     handle.addEventListener('pointermove', onMove)
     handle.addEventListener('pointerup', onUp)
     handle.addEventListener('pointercancel', onUp)
+  }
+
+  function deskWidth(): number {
+    return deskRef.current?.clientWidth ?? (typeof window !== 'undefined' ? window.innerWidth : 1200)
+  }
+
+  function setProblemWidthPersist(px: number) {
+    const next = clampProblemWidth(px, deskWidth())
+    setProblemWidth(next)
+    persistProblemWidth(next)
+  }
+
+  function onWorkPointerDown(e: ReactPointerEvent<HTMLDivElement>) {
+    if (e.button !== 0) return
+    e.preventDefault()
+    const handle = e.currentTarget
+    const startX = e.clientX
+    const startW = problemWidth
+    let latest = startW
+    handle.setPointerCapture(e.pointerId)
+
+    function onMove(ev: PointerEvent) {
+      // Dragging the editor's left edge rightward widens the statement column.
+      latest = clampProblemWidth(startW + (ev.clientX - startX), deskWidth())
+      setProblemWidth(latest)
+    }
+    function onUp(ev: PointerEvent) {
+      handle.releasePointerCapture(ev.pointerId)
+      handle.removeEventListener('pointermove', onMove)
+      handle.removeEventListener('pointerup', onUp)
+      handle.removeEventListener('pointercancel', onUp)
+      persistProblemWidth(latest)
+    }
+    handle.addEventListener('pointermove', onMove)
+    handle.addEventListener('pointerup', onUp)
+    handle.addEventListener('pointercancel', onUp)
+  }
+
+  function onWorkKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    const step = e.shiftKey ? 40 : 16
+    if (e.key === 'ArrowRight') {
+      e.preventDefault()
+      setProblemWidthPersist(problemWidth + step)
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault()
+      setProblemWidthPersist(problemWidth - step)
+    } else if (e.key === 'Home') {
+      e.preventDefault()
+      setProblemWidthPersist(PROBLEM_MIN_PX)
+    } else if (e.key === 'End') {
+      e.preventDefault()
+      setProblemWidthPersist(deskWidth())
+    }
   }
 
   function onMarginKeyDown(e: KeyboardEvent<HTMLDivElement>) {
@@ -887,7 +962,10 @@ export default function App() {
           ) : problem ? (
             <>
               <div className="problem-work">
-              <article className="problem">
+              <article
+                className="problem"
+                style={compact ? undefined : { flexBasis: problemWidth }}
+              >
                 {/* head lives INSIDE the left column so the editor column can
                     claim the desk's full height — no dead band beside the title */}
                 <div className="problem-head">
@@ -943,6 +1021,20 @@ export default function App() {
                 )}
               </article>
               <section className="workarea">
+                {!compact && (
+                  <div
+                    className="work-resize"
+                    role="separator"
+                    aria-orientation="vertical"
+                    aria-valuenow={problemWidth}
+                    aria-valuemin={PROBLEM_MIN_PX}
+                    aria-valuemax={clampProblemWidth(Number.MAX_SAFE_INTEGER, deskWidth())}
+                    aria-label="statement column width"
+                    tabIndex={0}
+                    onPointerDown={onWorkPointerDown}
+                    onKeyDown={onWorkKeyDown}
+                  />
+                )}
                 <div className="worklabel">
                   <span>your work</span>
                   <div className="workactions">

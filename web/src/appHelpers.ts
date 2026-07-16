@@ -1,6 +1,15 @@
 import { Fragment, createElement, type ChangeEvent, type CSSProperties, type ReactNode } from 'react'
 import type { PersistedTake, Problem, ProblemSummary, RunCaseResult, StudentRunResult } from './api'
-import { DESK_MIN_PX, LANG_SLUG, MARGIN_MIN_PX, MARGIN_WIDTH_KEY } from './appConstants'
+import {
+  DESK_CHROME_PX,
+  DESK_MIN_PX,
+  LANG_SLUG,
+  MARGIN_MIN_PX,
+  MARGIN_WIDTH_KEY,
+  PROBLEM_MIN_PX,
+  PROBLEM_WIDTH_KEY,
+  WORK_MIN_PX,
+} from './appConstants'
 import type { CardState, Mode, ScaffoldSeg } from './appTypes'
 import { parseMd, renderMd } from './md'
 
@@ -192,6 +201,35 @@ export function readStoredMarginWidth(): number {
 export function persistMarginWidth(px: number) {
   try {
     localStorage.setItem(MARGIN_WIDTH_KEY, String(px))
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Statement-column width: floor = its content-hug width; ceiling leaves the
+    editor column at least WORK_MIN_PX of the desk. */
+export function clampProblemWidth(px: number, deskWidth: number): number {
+  const max = Math.max(PROBLEM_MIN_PX, deskWidth - DESK_CHROME_PX - WORK_MIN_PX)
+  return Math.min(max, Math.max(PROBLEM_MIN_PX, Math.round(px)))
+}
+
+export function readStoredProblemWidth(): number {
+  try {
+    const raw = localStorage.getItem(PROBLEM_WIDTH_KEY)
+    if (raw != null) {
+      const n = Number(raw)
+      // Clamped against the live desk width on first layout effect.
+      if (Number.isFinite(n)) return Math.max(PROBLEM_MIN_PX, Math.round(n))
+    }
+  } catch {
+    /* private mode / blocked storage */
+  }
+  return PROBLEM_MIN_PX
+}
+
+export function persistProblemWidth(px: number) {
+  try {
+    localStorage.setItem(PROBLEM_WIDTH_KEY, String(px))
   } catch {
     /* ignore */
   }

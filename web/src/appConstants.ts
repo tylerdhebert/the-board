@@ -25,6 +25,14 @@ export const STAGE_COPY: Record<TurnStage, string> = {
 export const MARGIN_WIDTH_KEY = 'the-board:margin-width'
 export const MARGIN_MIN_PX = 240
 export const DESK_MIN_PX = 420
+
+export const PROBLEM_WIDTH_KEY = 'the-board:problem-width'
+/** The content-hug width of the statement column — its resize floor. */
+export const PROBLEM_MIN_PX = 620
+/** The editor column never gets squeezed below this by the divider. */
+export const WORK_MIN_PX = 480
+/** Desk horizontal padding (2×40) + the .problem-work column gap. */
+export const DESK_CHROME_PX = 120
 export const COMPOSER_LINE_PX = 22 // ~14.5px * 1.5
 export const COMPOSER_PAD_PX = 16 // vertical padding inside the chalk field
 export const COMPOSER_MIN_PX = COMPOSER_LINE_PX * 2 + COMPOSER_PAD_PX
