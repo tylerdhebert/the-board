@@ -415,7 +415,27 @@ Concise pickup list for the next agent (codex):
    Also relevant context: codex silent-stall diagnosis (07-16) — ingest
    failures were codex 0.144.1 streams going quiet mid-reasoning; the
    120s inactivity watchdog killed them; resolved after 0.144.5 update.
-14. **Conventions:** implementation goes to CLI subagents (implementer =
+14. **v0.4.0 SESSION TAIL (2026-07-16 evening — all verified live):**
+   (a) LC login cookie-harvest FIXED (383e451): csrftoken is host-only;
+   url-based cookies.get. Sign-in works end to end now.
+   (b) Desk layout arc: head inside statement column, editor claims spare
+   width (left column hugs 60ch, basis 620px), editor left edge DRAGGABLE
+   (floor 620 / editor keeps 480; localStorage the-board:problem-width),
+   vocab board capped 380px + anchored to desk bottom.
+   (c) Titlebar: .board grid column clamped minmax(0,1fr) — winctl can
+   never fly off; .strip-drag grab-zone spacer (90px pref / 24px floor);
+   providers → settings cog (monaco codicon-gear; NO icon lib by design).
+   (d) Resume fidelity (spec .agent-tasks/resume-fidelity.md, terra):
+   notes persist gesture/blanks/sent_back; PATCH /api/session/:id/note/:seq
+   (display state only, debounced 600ms); save-file rule — hydrated notes
+   render settled (no deal-in replay), Monaco POINT arrow + TAP shimmer stay
+   ephemeral. Historic turns have no recorded gesture/fills (data never
+   captured — unrecoverable); optional sent-back backfill NOT built.
+   (e) SHOW cards click-toggle to the fan's held-card presentation (360x232,
+   16px type); artifacts renamed 'study guides' user-facing everywhere
+   (internals unchanged); study-guides shelf popover in the margin head;
+   editor tabSize 4 (LC convention).
+15. **Conventions:** implementation goes to CLI subagents (implementer =
    grok-4.5-xhigh via the cli-subagents skill's cursor-subagent.ps1; spec
    in `.agent-tasks/*.md`, short flag-free prompt "read X and implement it
    exactly"); orchestrator writes the spec, reviews the diff, verifies
