@@ -949,7 +949,6 @@ export default function App() {
               stroke="currentColor"
               strokeWidth="1.5"
               strokeLinecap="round"
-              filter="url(#chalk-rough)"
             >
               <circle cx="10" cy="10" r="3.1" />
               <path d="M10 2.4v2.5M10 15.1v2.5M2.4 10h2.5M15.1 10h2.5M4.6 4.6l1.8 1.8M13.6 13.6l1.8 1.8M15.4 4.6l-1.8 1.8M6.4 13.6l-1.8 1.8" />

@@ -3,6 +3,10 @@
   height: 100%;
   display: grid;
   grid-template-rows: auto 1fr;
+  /* clamp the single column to the viewport: without this the implicit track
+     sizes to the stage's min-content and the titlebar stretches past the
+     window edge, carrying the window controls with it */
+  grid-template-columns: minmax(0, 1fr);
   position: relative;
   z-index: 1;
 }
@@ -44,9 +48,12 @@
 .wordmark .tail { color: var(--chalk-dim); font-size: 12px; font-family: var(--mono); }
 
 /* the flexible gap between wordmark and loader — a real element (not an auto
-   margin) so it can guarantee a minimum: this is the titlebar's grab zone */
+   margin) so it keeps a floor: this is the titlebar's grab zone. It yields
+   under pressure (the window controls are the invariant, not this) but never
+   vanishes; the strip's gaps and padding are draggable too. */
 .strip-drag {
-  flex: 1 0 90px;
+  flex: 1 1 90px;
+  min-width: 24px;
   align-self: stretch;
 }
 
@@ -55,7 +62,7 @@
 .loader input {
   flex: 0 1 340px;
   width: 340px;
-  min-width: 110px;
+  min-width: 70px;
   max-width: 44vw;
   background: transparent;
   border: 0;
@@ -109,5 +116,10 @@
 /* narrow windows: the tagline is decoration — give its width to the grab zone */
 @media (max-width: 1040px) {
   .wordmark .tail { display: none; }
+}
+/* very narrow (720px OS minimum ≈ 576 CSS px at 125% zoom): the submit
+   button goes — Enter still sends — so the window controls always fit */
+@media (max-width: 700px) {
+  .loader button { display: none; }
 }
 
