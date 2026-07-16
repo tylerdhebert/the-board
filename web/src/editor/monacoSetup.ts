@@ -46,6 +46,9 @@ export const codeEditorOptions = {
   folding: false,
   guides: { indentation: false },
   scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8 },
-  tabSize: 2,
+  // match LeetCode's convention so pasted/submitted code lines up
+  tabSize: 4,
+  insertSpaces: true,
+  detectIndentation: false,
   automaticLayout: true,
 }
