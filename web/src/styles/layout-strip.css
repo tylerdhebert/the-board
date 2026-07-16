@@ -110,8 +110,11 @@
   display: inline-flex;
   align-items: center;
 }
-.stripbtn.cog svg { display: block; transition: transform 200ms ease; }
-.stripbtn.cog:hover svg { transform: rotate(40deg); }
+.stripbtn.cog .codicon {
+  font-size: 17px;
+  transition: transform 200ms ease;
+}
+.stripbtn.cog:hover .codicon { transform: rotate(40deg); }
 
 /* narrow windows: the tagline is decoration — give its width to the grab zone */
 @media (max-width: 1040px) {
