@@ -1,9 +1,9 @@
-/* vocabulary — compact wood-framed card under the statement (not a hero board) */
+/* vocabulary — wood-framed board filling the column below the statement */
 .vocab {
   position: relative;
-  /* sizes to its words by default; may shrink (and clip) when the column is
-     tight — never an internal scroll */
-  flex: 0 1 auto;
+  /* grows to the desk bottom (the slate surface absorbs the extra); may
+     shrink (and clip) when the column is tight — never an internal scroll */
+  flex: 1 1 auto;
   margin-top: 16px;
   display: flex;
   flex-direction: column;

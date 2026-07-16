@@ -1,6 +1,7 @@
-/* code editor slot — right column of .problem-work */
+/* code editor slot — right column of .problem-work; claims every pixel the
+   content-capped statement column doesn't need */
 .workarea {
-  flex: 1 1 46%;
+  flex: 1 1 0;
   min-height: 0;
   min-width: 0;
   display: flex;
