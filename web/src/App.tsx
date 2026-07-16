@@ -886,27 +886,29 @@ export default function App() {
             <LoadingBoard query={loadingQuery} ingesting={ingesting} />
           ) : problem ? (
             <>
-              <div className="problem-head">
-                <p className="eyebrow">the problem</p>
-                <div className="problem-title-row">
-                  <h1>{problem.title}</h1>
-                  {problem.difficulty && (
-                    <span
-                      className={`diff-badge ${difficultyClass(problem.difficulty)}`}
-                    >
-                      {problem.difficulty.toLowerCase()}
-                    </span>
-                  )}
-                  {solved && <span className="solved-stamp">solved ✓</span>}
-                  {problem.url && (
-                    <a className="lc-link" href={problem.url} target="_blank" rel="noreferrer">
-                      on leetcode ↗
-                    </a>
-                  )}
-                </div>
-              </div>
               <div className="problem-work">
               <article className="problem">
+                {/* head lives INSIDE the left column so the editor column can
+                    claim the desk's full height — no dead band beside the title */}
+                <div className="problem-head">
+                  <p className="eyebrow">the problem</p>
+                  <div className="problem-title-row">
+                    <h1>{problem.title}</h1>
+                    {problem.difficulty && (
+                      <span
+                        className={`diff-badge ${difficultyClass(problem.difficulty)}`}
+                      >
+                        {problem.difficulty.toLowerCase()}
+                      </span>
+                    )}
+                    {solved && <span className="solved-stamp">solved ✓</span>}
+                    {problem.url && (
+                      <a className="lc-link" href={problem.url} target="_blank" rel="noreferrer">
+                        on leetcode ↗
+                      </a>
+                    )}
+                  </div>
+                </div>
                 <div className="problem-body">
                   <div className="statement-pane">
                     <h2>statement</h2>
