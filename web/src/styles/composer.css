@@ -75,6 +75,26 @@
 .review:hover { color: #ffd76a; }
 .review:disabled { color: var(--chalk-faint); cursor: default; }
 
+/* off-the-record toggle — quiet until armed, then unmistakably coral */
+.offrecord {
+  width: 100%;
+  margin-bottom: 10px;
+  background: transparent;
+  border: 0;
+  color: var(--chalk-faint);
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: lowercase;
+  letter-spacing: 0.08em;
+  padding: 4px 6px;
+  cursor: pointer;
+  text-align: center;
+}
+.offrecord:hover { color: var(--chalk); }
+.offrecord.on { color: var(--coral); text-shadow: 0 0 12px rgba(239, 138, 106, 0.35); }
+.offrecord.on:hover { color: #ff9f82; }
+.offrecord:disabled { opacity: 0.5; cursor: default; }
+
 .scaffold-say {
   white-space: pre-wrap;
 }

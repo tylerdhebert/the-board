@@ -82,6 +82,7 @@ export default function App() {
   const [seed, setSeed] = useState('') // the scaffold currently loaded, to detect edits
   const [lang, setLang] = useState<string>('typescript')
   const [busy, setBusy] = useState(false)
+  const [direct, setDirect] = useState(false)
   const [stage, setStage] = useState<TurnStage | null>(null)
   const [loading, setLoading] = useState(false)
   const [ingesting, setIngesting] = useState(false)
@@ -384,6 +385,7 @@ export default function App() {
     setNotes([])
     setPoint(null)
     setTapNonce(0)
+    setDirect(false)
     setInput('')
     setError(null)
     applyTakes([])
@@ -448,6 +450,7 @@ export default function App() {
       setFresh(new Set())
       setPoint(null)
       setTapNonce(0)
+      setDirect(false)
       setInput('')
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -490,6 +493,7 @@ export default function App() {
       const r = await submitTurn(sessionId, sendText, {
         display: displayText,
         onStage: setStage,
+        direct,
       })
       setNotes((p) => [
         ...p,
@@ -821,6 +825,7 @@ export default function App() {
             setNotes([])
             setPoint(null)
             setTapNonce(0)
+            setDirect(false)
             applyTakes([])
             setSessionSolved(false)
             setOpenStack(null)
@@ -1297,7 +1302,8 @@ export default function App() {
                 })()}
                 {!n.revealing && n.unlocked && n.unlocked.length > 0 && (
                   <p className="unlocked">
-                    <b>✓ you've got it:</b> {n.unlocked.join(' · ')}
+                    <b>{n.mode === 'direct' ? '⏻ now on the table:' : "✓ you've got it:"}</b>{' '}
+                    {n.unlocked.join(' · ')}
                   </p>
                 )}
               </div>
@@ -1307,7 +1313,11 @@ export default function App() {
                 <span className="dot" />
                 <span className="dot" />
                 <span className="dot" />
-                {stage ? STAGE_COPY[stage] : 'reading your move…'}
+                {stage
+                  ? direct && stage === 'unlock'
+                    ? 'noting what was said out loud…'
+                    : STAGE_COPY[stage]
+                  : 'reading your move…'}
               </div>
             )}
           </div>
@@ -1316,6 +1326,21 @@ export default function App() {
             {sessionId && (
               <button className="review chalk amber" type="button" onClick={review} disabled={busy || !code.trim()}>
                 ✎ review my work
+              </button>
+            )}
+            {sessionId && (
+              <button
+                className={`offrecord${direct ? ' on' : ''}`}
+                type="button"
+                onClick={() => setDirect((d) => !d)}
+                disabled={busy}
+                title={
+                  direct
+                    ? 'the gate is off — the tutor answers anything; whatever it reveals is unlocked for good'
+                    : 'drop the socratic act for a straight conversation (what gets revealed stays revealed)'
+                }
+              >
+                {direct ? '⏻ off the record — the gate is off' : '○ off the record'}
               </button>
             )}
             <div className="row composer-field chalk lit">
@@ -1329,7 +1354,13 @@ export default function App() {
                 rows={2}
                 value={input}
                 disabled={!sessionId || busy}
-                placeholder={sessionId ? 'say what you’re thinking…' : 'load a problem first'}
+                placeholder={
+                  sessionId
+                    ? direct
+                      ? 'off the record — ask me anything…'
+                      : 'say what you’re thinking…'
+                    : 'load a problem first'
+                }
                 style={{ height: composerHeight }}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={onKey}

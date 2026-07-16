@@ -1,4 +1,4 @@
-export type Mode = 'socratic' | 'analog' | 'scaffold'
+export type Mode = 'socratic' | 'analog' | 'scaffold' | 'direct'
 export type TeacherGesture =
   | { kind: 'point'; line: number; endLine?: number; quote: string }
   | { kind: 'show'; caseNumber: number }

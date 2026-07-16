@@ -363,7 +363,29 @@ Concise pickup list for the next agent (codex):
    python/dotnet/csharp-ls, gray out missing features — absorbs the
    provider-check idea), first-run polish, backlog items (API-client
    backends, mutation-run support, README refresh).
-12. **Conventions:** implementation goes to CLI subagents (implementer =
+12. **DIRECT MODE (2026-07-16): the off-the-record escape hatch.** User
+   decision: sometimes you need to just TALK to the model with full problem
+   context, gate off. `session.submit(msg, onStage, ctx, { direct: true })`
+   skips the pre-unlock judge AND the gate entirely; the teacher runs on
+   `prompts/teacher_direct_tmpl.md` (full answer key, answers anything,
+   `MODE: direct`); afterwards a REVEAL JUDGE (`judgeReveal`,
+   `prompts/reveal_tmpl.md`, unlock role's client) unlocks any leak terms
+   the exchange actually surfaced — so later socratic turns don't pretend
+   the student never heard them (user chose auto-unlock over leaving locks).
+   Reveal-judge failures are swallowed (never eat a produced reply). Gated
+   turns coerce a self-declared `MODE: direct` back to socratic (teacher
+   can't unmuzzle itself — enforced in teacherTurn). Web: "off the record"
+   toggle in the composer (coral when armed, resets on session switch),
+   `direct` flag on POST submit, coral `direct` badge, "now on the table"
+   unlock copy. CLI: type `direct` to toggle. Same session (2026-07-16):
+   teacher_tmpl gained the "Read the register: working vs. talking" section
+   (stop deflecting genuine questions into exercises / reflexive
+   example-grounding; restored "keep replies SHORT") and gate_tmpl gained
+   "What is NOT a leak" (student's own ideas, non-locked vocab, brute-force
+   talk, meta questions — tripwire, not conversation police). Verified:
+   engine+server tsc, web build, fake-client e2e (direct template used,
+   gate never called, reveal unlock mutates locked set).
+13. **Conventions:** implementation goes to CLI subagents (implementer =
    grok-4.5-xhigh via the cli-subagents skill's cursor-subagent.ps1; spec
    in `.agent-tasks/*.md`, short flag-free prompt "read X and implement it
    exactly"); orchestrator writes the spec, reviews the diff, verifies

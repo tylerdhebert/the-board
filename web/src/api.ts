@@ -86,7 +86,7 @@ export interface ResumePayload {
 
 export interface TurnResult {
   reply: string
-  mode: 'socratic' | 'analog' | 'scaffold'
+  mode: 'socratic' | 'analog' | 'scaffold' | 'direct'
   unlockedThisTurn: string[]
   redrafted: boolean
   gesture?:
@@ -146,7 +146,7 @@ export type TurnStage = 'unlock' | 'draft' | 'gate' | 'redraft'
 export async function submitTurn(
   sessionId: string,
   message: string,
-  opts?: { display?: string; onStage?: (stage: TurnStage) => void },
+  opts?: { display?: string; onStage?: (stage: TurnStage) => void; direct?: boolean },
 ): Promise<TurnResult> {
   const res = await fetch(`/api/session/${sessionId}/submit`, {
     method: 'POST',
@@ -154,6 +154,7 @@ export async function submitTurn(
     body: JSON.stringify({
       message,
       ...(opts?.display !== undefined ? { display: opts.display } : {}),
+      ...(opts?.direct ? { direct: true } : {}),
     }),
   })
   if (!res.ok) {

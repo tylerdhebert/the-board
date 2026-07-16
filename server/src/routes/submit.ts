@@ -21,13 +21,14 @@ export async function handleSubmit(
     sendJson(res, 404, { error: 'session not found' });
     return true;
   }
-  const body = (await readJsonBody(req)) as { message?: string; display?: string };
+  const body = (await readJsonBody(req)) as { message?: string; display?: string; direct?: boolean };
   const message = body.message;
   if (typeof message !== 'string') {
     sendJson(res, 400, { error: 'message is required' });
     return true;
   }
   const display = typeof body.display === 'string' ? body.display : undefined;
+  const direct = body.direct === true;
   res.writeHead(200, {
     ...CORS,
     'Content-Type': 'text/event-stream',
@@ -45,6 +46,7 @@ export async function handleSubmit(
       message,
       (stage) => sendEvent(res, 'stage', { stage }),
       { cwd: teacherCwd, boardContext },
+      { direct },
     );
     entry.persisted.notes.push({
       role: 'student',

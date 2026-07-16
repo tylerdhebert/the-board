@@ -28,7 +28,7 @@ export interface ProblemCard {
   /** Statement figures downloaded at ingest; statement refers to them as ![alt](figure:N). */
   figures?: { alt: string; data: string }[];
 }
-export type TutorMode = 'socratic' | 'analog' | 'scaffold';
+export type TutorMode = 'socratic' | 'analog' | 'scaffold' | 'direct';
 export type GateOffense = 'leak' | 'wrong-endorsement' | 'premature-bridge' | 'premature-answer' | 'none';
 export interface GateVerdict { verdict: 'PASS' | 'REVISE'; offense: GateOffense; note: string }
 export interface Message { role: 'student' | 'teacher'; content: string }

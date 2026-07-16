@@ -132,6 +132,7 @@
 .badge.socratic { background: var(--sky); }
 .badge.analog { background: var(--amber); }
 .badge.scaffold { background: var(--rose); }
+.badge.direct { background: var(--coral); }
 .badge.revised { background: transparent; color: var(--chalk-faint); box-shadow: inset 0 0 0 1px var(--chalk-faint); transform: rotate(1deg); }
 .badge.point {
   background: transparent;

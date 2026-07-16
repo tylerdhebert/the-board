@@ -35,19 +35,29 @@ async function main(): Promise<void> {
   console.log(`(logging to ${logPath})`);
 
   const rl = readline.createInterface({ input, output });
+  let direct = false;
   try {
     for (;;) {
       let line: string;
       try {
-        line = await rl.question('you> ');
+        line = await rl.question(direct ? 'you (off the record)> ' : 'you> ');
       } catch {
         break; // EOF
       }
       const trimmed = line.trim();
       if (trimmed === 'exit' || trimmed === 'quit') break;
+      if (trimmed === 'direct') {
+        direct = !direct;
+        console.log(
+          direct
+            ? `${DIM}(direct mode ON — gate off, tutor speaks freely)${RESET}`
+            : `${DIM}(direct mode OFF — socratic tutoring resumes)${RESET}`,
+        );
+        continue;
+      }
       if (trimmed === '') continue;
 
-      const result = await session.submit(trimmed);
+      const result = await session.submit(trimmed, undefined, undefined, { direct });
       console.log(`tutor [${result.mode}]> ${result.reply}`);
       if (result.unlockedThisTurn.length > 0) {
         console.log(`${DIM}(unlocked: ${result.unlockedThisTurn.join(', ')})${RESET}`);

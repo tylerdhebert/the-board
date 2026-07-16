@@ -98,7 +98,7 @@ export function parseTeacherReply(raw: string): TeacherReply {
     return { mode: 'socratic', reply: raw.trim(), raw };
   }
 
-  const match = lines[firstNonEmptyIdx]!.match(/^MODE:\s*(socratic|analog|scaffold)\b/i);
+  const match = lines[firstNonEmptyIdx]!.match(/^MODE:\s*(socratic|analog|scaffold|direct)\b/i);
   if (!match) {
     // No MODE — fallback replies stay as-is; do not attempt gesture parsing.
     return { mode: 'socratic', reply: raw.trim(), raw };
@@ -134,8 +134,12 @@ export async function teacherTurn(
   lockedTerms: string[], model: string,
   gateFeedback?: { rejectedDraft: string; note: string },
   turnContext?: TeacherTurnContext,
+  direct = false,
 ): Promise<TeacherReply> {
-  const tpl = await readFile(join(PROMPTS_DIR, 'teacher_tmpl.md'), 'utf-8');
+  const tpl = await readFile(
+    join(PROMPTS_DIR, direct ? 'teacher_direct_tmpl.md' : 'teacher_tmpl.md'),
+    'utf-8',
+  );
   const traps = bullets(
     card.traps.map((t) => {
       let line = `${t.wrong_approach} — ${t.why_wrong}`;
@@ -175,5 +179,11 @@ export async function teacherTurn(
     ...(turnContext?.cwd ? { cwd: turnContext.cwd } : {}),
   });
 
-  return parseTeacherReply(raw);
+  const parsed = parseTeacherReply(raw);
+  // The mode is a policy signal: gated turns must never self-declare
+  // 'direct' (the teacher can't unmuzzle itself), and a direct turn is
+  // 'direct' regardless of what the model wrote.
+  if (direct) return { ...parsed, mode: 'direct' };
+  if (parsed.mode === 'direct') return { ...parsed, mode: 'socratic' };
+  return parsed;
 }

@@ -4,7 +4,7 @@ import { createClient } from './providers.js';
 import { teacherTurn, type TeacherGesture, type TeacherTurnContext } from './teacher.js';
 import { NullTracer, TracingLLMClient, type Tracer } from './trace.js';
 import type { GateVerdict, Message, ProblemCard, TutorMode } from './types.js';
-import { judgeUnlock } from './unlockJudge.js';
+import { judgeReveal, judgeUnlock } from './unlockJudge.js';
 
 export interface RoleConfig { backend: string; model: string }
 export interface SessionModels { teacher: RoleConfig; gate: RoleConfig; unlock: RoleConfig }
@@ -24,6 +24,11 @@ export interface TurnResult {
 
 /** Optional board context for the teacher only (cwd + rendered BOARD lines). */
 export type SubmitTurnContext = TeacherTurnContext;
+
+export interface SubmitOptions {
+  /** Off the record: no gate, no withholding; reveals are unlocked after the fact. */
+  direct?: boolean;
+}
 
 
 function tokenize(text: string): string[] {
@@ -131,15 +136,82 @@ export class TutorSession {
     return reply + `\n\n[gesture: taps the vocab board without revealing anything]`;
   }
 
+  /** Off-the-record turn: full-context teacher, no gate; unlock reveals after. */
+  private async submitDirect(
+    studentMessage: string,
+    turn: number,
+    lockedBefore: string[],
+    onStage?: (stage: TurnStage) => void,
+    turnContext?: SubmitTurnContext,
+  ): Promise<TurnResult> {
+    onStage?.('draft');
+    let t = await teacherTurn(
+      this.teacherClient, this.card, this._transcript, this._lockedTerms, this.models.teacher.model,
+      undefined,
+      turnContext,
+      true,
+    );
+    t = { ...t, gesture: this.acceptGesture(t.gesture) };
+
+    let unlockedThisTurn: string[] = [];
+    if (this._lockedTerms.length > 0) {
+      onStage?.('unlock');
+      try {
+        const result = await judgeReveal(
+          this.unlockClient, this._lockedTerms, studentMessage, t.reply, this.models.unlock.model,
+        );
+        unlockedThisTurn = result.unlocked;
+        for (const term of unlockedThisTurn) {
+          const idx = this._lockedTerms.indexOf(term);
+          if (idx !== -1) this._lockedTerms.splice(idx, 1);
+        }
+      } catch {
+        // The reply already exists — a bookkeeping failure must not eat it.
+        // Worst case a revealed term stays locked and the reveal judge gets
+        // another look next direct turn.
+      }
+    }
+
+    const verdict: GateVerdict = { verdict: 'PASS', offense: 'none', note: 'direct mode — gate off' };
+    this._transcript.push({ role: 'teacher', content: t.reply });
+
+    await this.tracer.endTurn({
+      turn,
+      ts: new Date().toISOString(),
+      studentMsg: studentMessage,
+      lockedBefore,
+      lockedAfter: [...this._lockedTerms],
+      unlocked: unlockedThisTurn,
+      redrafted: false,
+      finalMode: t.mode,
+      finalReply: t.reply,
+      finalVerdict: verdict,
+    });
+
+    return {
+      mode: t.mode,
+      reply: t.reply,
+      gate: verdict,
+      redrafted: false,
+      unlockedThisTurn,
+      ...(t.gesture ? { gesture: t.gesture } : {}),
+    };
+  }
+
   async submit(
     studentMessage: string,
     onStage?: (stage: TurnStage) => void,
     turnContext?: SubmitTurnContext,
+    opts?: SubmitOptions,
   ): Promise<TurnResult> {
     const turn = ++this.turnCounter;
     const lockedBefore = [...this._lockedTerms];
 
     this._transcript.push({ role: 'student', content: studentMessage });
+
+    if (opts?.direct) {
+      return this.submitDirect(studentMessage, turn, lockedBefore, onStage, turnContext);
+    }
 
     let unlockedThisTurn: string[] = [];
     if (shouldJudgeUnlock(studentMessage, this._lockedTerms) && this._lockedTerms.length > 0) {
