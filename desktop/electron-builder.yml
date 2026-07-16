@@ -3,7 +3,7 @@ productName: The Board
 electronLanguages:
   - en-US
 directories:
-  output: release
+  output: release/${version}
   buildResources: build
 files:
   - main.mjs

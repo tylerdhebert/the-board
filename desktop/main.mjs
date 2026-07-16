@@ -248,8 +248,10 @@ function createWindow(webUrl) {
     backgroundColor: '#16241d',
     width: DEFAULT_BOUNDS.width,
     height: DEFAULT_BOUNDS.height,
-    minWidth: 1100,
-    minHeight: 700,
+    // Low enough to fit a portrait 1080 monitor (even at 125–150% display
+    // scaling). The renderer switches to compact mode well before this.
+    minWidth: 720,
+    minHeight: 600,
     icon: path.join(__dirname, 'build', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),

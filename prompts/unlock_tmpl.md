@@ -18,17 +18,25 @@ STUDENT'S LATEST MESSAGE:
 {{student_msg}}
 
 ## The rule — ownership, not mention
-Unlock a term ONLY if the student put that idea forward as THEIR OWN direction —
-the move they are making, even if tentatively ("maybe I could store each
-number as I go..."). That is ownership; they did the thinking.
+Unlock a term ONLY if the student has shown the idea is THEIRS: they put it
+forward as the move they're making, OR they correctly worked out how it works
+in their own words — even tentatively ("maybe I could store each number as I
+go...", "so I'd keep the best total from a couple houses back and build up").
+Doing the reasoning is ownership, whether or not a question led them to it. A
+student who is led to an insight and then genuinely reconstructs it has still
+done the thinking — that is exactly the moment to unlock, not a reason to
+withhold. Socratic teaching works by leading; if being led disqualified them,
+nothing would ever unlock.
 
-Do NOT unlock if the student merely uttered the word while:
+Do NOT unlock for mention without understanding — the student merely uttered
+the word while:
 - asking whether it's right ("should I use a hash map?"),
 - guessing among options ("is it a hash map? two pointers? sorting?"),
 - fishing for confirmation, or
-- repeating a term the tutor just used.
-Mention is not commitment. A leading question must NOT unlock anything, or the
-whole point of withholding collapses.
+- parroting back a term or explanation the tutor just handed over, adding nothing.
+Mention is not commitment, and a lucky guess is not ownership. The test is
+whether the student could now say WHY it works — not whether a question came
+first.
 
 When unsure, do NOT unlock (empty list). Unlocking is monotonic and hard to
 undo, so err toward keeping things locked.
