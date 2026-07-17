@@ -1,4 +1,5 @@
 import type { Judge } from '../types.js';
+import { CASE_SENTINEL } from './console.js';
 
 export function buildCsharpProgram(code: string, entry: string, casesPath: string, judge?: Judge): string {
   // Student code may already declare Solution; harness is a separate static class with Main.
@@ -26,7 +27,11 @@ static class __StudentHarness {
       var instance = Activator.CreateInstance(solutionType);
       var parameters = method.GetParameters();
       var results = new System.Collections.Generic.List<object>();
+      var caseIndex = 0;
       foreach (var caseEl in casesDoc.RootElement.EnumerateArray()) {
+        Console.WriteLine($"${CASE_SENTINEL}{caseIndex}__");
+        Console.Out.Flush();
+        caseIndex++;
         try {
           var args = new object[parameters.Length];
           for (var i = 0; i < parameters.Length; i++) {

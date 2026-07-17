@@ -17,6 +17,7 @@ export async function generateCard(
   client: LLMClient,
   statement: string,
   model: string,
+  opts?: { signal?: AbortSignal; inactivityMs?: number },
 ): Promise<ProblemCard> {
   const ingestPrompt = await readFile(join(PROMPTS_DIR, 'ingest_prompt.md'), 'utf-8');
   const prompt = ingestPrompt + '\n\n## PROBLEM STATEMENT\n' + statement;
@@ -24,6 +25,8 @@ export async function generateCard(
     model,
     prompt,
     outputSchemaPath: SCHEMA_PATH,
+    signal: opts?.signal,
+    inactivityMs: opts?.inactivityMs,
   });
 }
 
@@ -226,9 +229,9 @@ export async function ingest(
   client: LLMClient,
   statement: string,
   model: string,
-  opts?: { metaData?: string; judge?: Judge },
+  opts?: { metaData?: string; judge?: Judge; signal?: AbortSignal; inactivityMs?: number },
 ): Promise<IngestResult> {
-  const card = await generateCard(client, statement, model);
+  const card = await generateCard(client, statement, model, opts);
   const judge = opts?.judge ?? detectJudge(opts?.metaData, card.examples);
   if (judge) card.judge = judge;
   const verification = await verifyCard(card);

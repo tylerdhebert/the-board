@@ -6,6 +6,8 @@ import { handleProblems } from './problems.js';
 import { handleRun } from './runs.js';
 import { handleCreateSession } from './sessions.js';
 import type { SessionRouteDeps } from './sessions.js';
+import { handleIngest } from './ingest.js';
+import type { IngestRouteDeps } from './ingest.js';
 import { handleSettings } from './settings.js';
 import { tryServeStatic } from './static.js';
 import { handleStress } from './stress.js';
@@ -17,7 +19,7 @@ import { CORS, sendJson } from './http.js';
 export async function handle(
   req: http.IncomingMessage,
   res: http.ServerResponse,
-  deps: SessionRouteDeps = {},
+  deps: SessionRouteDeps & IngestRouteDeps = {},
 ): Promise<void> {
   const method = req.method ?? 'GET';
   const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
@@ -32,6 +34,7 @@ export async function handle(
   if (await handleProblems(method, pathname, res)) return;
   if (await handleLspInfo(method, pathname, url, res)) return;
   if (await handleSettings(method, pathname, req, res)) return;
+  if (await handleIngest(method, pathname, req, res, deps)) return;
   if (await handleCreateSession(method, pathname, req, res, deps)) return;
   if (await handleNoteState(method, pathname, req, res)) return;
   if (await handleEditor(method, pathname, req, res)) return;
@@ -45,7 +48,7 @@ export async function handle(
   sendJson(res, 404, { error: 'not found' });
 }
 
-export function createRequestHandler(deps: SessionRouteDeps = {}): (
+export function createRequestHandler(deps: SessionRouteDeps & IngestRouteDeps = {}): (
   req: http.IncomingMessage,
   res: http.ServerResponse,
 ) => void {

@@ -1,5 +1,6 @@
 import type { CaseSpec } from '../exampleCases.js';
 import type { Judge } from '../types.js';
+import { CASE_SENTINEL } from './console.js';
 
 export function buildTsHarness(
   code: string,
@@ -18,7 +19,9 @@ export function buildTsHarness(
   const __judge: { kind: string; argIndex: number } | null = ${judgeJson};
   const __fn: (...args: unknown[]) => unknown = ${entry} as any;
   const __results: { got: unknown; error: string | null }[] = [];
-  for (const __args of __cases) {
+  for (let __caseIndex = 0; __caseIndex < __cases.length; __caseIndex++) {
+    const __args = __cases[__caseIndex]!;
+    console.log(${JSON.stringify(CASE_SENTINEL)} + __caseIndex + '__');
     try {
       const __ret = __fn(...__args);
       let __got: unknown = __ret;

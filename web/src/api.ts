@@ -26,6 +26,24 @@ export interface Problem {
 
 export type ProblemStatus = 'new' | 'attempted' | 'solved'
 
+export type IngestJobStatus = 'running' | 'done' | 'error' | 'canceled'
+
+export interface IngestJob {
+  id: string
+  query: string
+  status: IngestJobStatus
+  title?: string
+  cardName?: string
+  error?: string
+  startedAt: string
+}
+
+export type IngestEvent =
+  | { type: 'ingest:started'; jobId: string; query: string }
+  | { type: 'ingest:done'; jobId: string; query: string; cardName: string; title: string }
+  | { type: 'ingest:error'; jobId: string; query: string; error: string }
+  | { type: 'ingest:canceled'; jobId: string; query: string }
+
 export interface ProblemSessionRef {
   id: string
   startedAt: string
@@ -65,6 +83,8 @@ export type RunCaseResult = {
 }
 
 export type StudentRunResult = { cases: RunCaseResult[]; error?: string }
+
+export type ConsoleBlock = { label?: string; text: string }
 
 export type PersistedTake = {
   seq: number
@@ -124,6 +144,25 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 
 export async function getProblems(): Promise<ProblemSummary[]> {
   return request<ProblemSummary[]>('/api/problems')
+}
+
+export async function getIngestJobs(): Promise<IngestJob[]> {
+  return request<IngestJob[]>('/api/ingest')
+}
+
+export async function enqueueIngest(query: string): Promise<{ jobId: string; query: string }> {
+  return request<{ jobId: string; query: string }>('/api/ingest', {
+    method: 'POST',
+    body: JSON.stringify({ query }),
+  })
+}
+
+export async function cancelIngest(jobId: string): Promise<IngestJob> {
+  return request<IngestJob>(`/api/ingest/${jobId}`, { method: 'DELETE' })
+}
+
+export function appEventsWsUrl(): string {
+  return `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/events`
 }
 
 export async function getSession(id: string): Promise<ResumePayload> {
@@ -219,9 +258,13 @@ export async function runExamples(
   code: string,
   language: string,
   dirty?: { code: string; lang: string },
-): Promise<{ result: StudentRunResult; takes: PersistedTake[] }> {
+): Promise<{ result: StudentRunResult; takes: PersistedTake[]; consoleOutput?: ConsoleBlock[] }> {
   try {
-    return await request<{ result: StudentRunResult; takes: PersistedTake[] }>(
+    return await request<{
+      result: StudentRunResult
+      takes: PersistedTake[]
+      consoleOutput?: ConsoleBlock[]
+    }>(
       `/api/session/${sessionId}/run`,
       {
         method: 'POST',

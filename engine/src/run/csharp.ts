@@ -3,10 +3,10 @@ import { join } from 'node:path';
 import type { CaseSpec } from '../exampleCases.js';
 import type { Judge } from '../types.js';
 import { CSHARP_TIMEOUT_MS, CSPROJ, csharpScratch } from './constants.js';
-import { lastJsonLine, runChild } from './child.js';
+import { runChild } from './child.js';
 import { buildCsharpProgram } from './harnessCsharp.js';
-import { parseHarness, toRunResult } from './parse.js';
-import type { HarnessPayload, StudentRunResult } from './types.js';
+import { parseRunResult } from './parse.js';
+import type { StudentRunResult } from './types.js';
 
 async function ensureCsharpScratch(): Promise<void> {
   const scratch = csharpScratch();
@@ -33,25 +33,10 @@ export async function runCsharp(
     { cwd: scratch, timeoutMs: CSHARP_TIMEOUT_MS },
   );
 
-  if (timedOut) {
-    return { cases: [], error: `timed out after ${CSHARP_TIMEOUT_MS / 1000}s (infinite loop?)` };
+  const result = parseRunResult(cases, stdout, stderr, timedOut, CSHARP_TIMEOUT_MS, judge);
+  // Compile errors land on stderr; preserve that detail when no harness result exists.
+  if (result.error === 'no harness output' && exitCode !== 0) {
+    return { ...result, error: `dotnet exited with code ${exitCode}` };
   }
-
-  const line = lastJsonLine(stdout);
-  if (line) {
-    try {
-      const payload = JSON.parse(line) as HarnessPayload;
-      return toRunResult(cases, payload, judge);
-    } catch {
-      // fall through to stderr fatal
-    }
-  }
-
-  // Compile errors land on stderr
-  if (exitCode !== 0 || !line) {
-    const errLines = stderr.trim().split(/\r?\n/).filter(Boolean).slice(0, 10).join('\n');
-    return { cases: [], error: errLines || `dotnet exited with code ${exitCode}` };
-  }
-
-  return toRunResult(cases, parseHarness(stdout, stderr, false, CSHARP_TIMEOUT_MS), judge);
+  return result;
 }

@@ -423,12 +423,16 @@ function createWindow(webUrl) {
     killApiChild()
   })
 
-  win.webContents.on('before-input-event', (event, input) => {
-    if (input.control && input.shift && input.key.toLowerCase() === 'd') {
-      win?.webContents.toggleDevTools()
-      event.preventDefault()
-    }
-  })
+  // DevTools shortcut only on the debug surface (dev runs, or TUTOR_DEBUG=1
+  // to re-enable on an installed build) — same gate as the CDP port.
+  if (debugSurface) {
+    win.webContents.on('before-input-event', (event, input) => {
+      if (input.control && input.shift && input.key.toLowerCase() === 'd') {
+        win?.webContents.toggleDevTools()
+        event.preventDefault()
+      }
+    })
+  }
 
   if (process.env.TUTOR_OPEN_DEVTOOLS === '1') {
     win.webContents.openDevTools({ mode: 'detach' })

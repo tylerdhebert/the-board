@@ -60,13 +60,14 @@ export async function handleRun(
     const snippets = await loadSnippets(entry.cardName);
     const slug = LANG_SLUG[language] ?? language;
     const scaffold = snippets.find((s) => s.langSlug === slug)?.code;
-    const result = await runStudentCode(
+    const runResult = await runStudentCode(
       code,
       language as 'python' | 'typescript' | 'javascript' | 'csharp',
       cases,
       scaffold,
       entry.card.judge,
     );
+    const { console: consoleOutput, ...result } = runResult;
     const newest = entry.persisted.takes[entry.persisted.takes.length - 1];
     if (
       newest &&
@@ -91,7 +92,11 @@ export async function handleRun(
       entry.persisted.solved = true;
     }
     await persistEntry(entry);
-    sendJson(res, 200, { result, takes: entry.persisted.takes });
+    sendJson(res, 200, {
+      result,
+      takes: entry.persisted.takes,
+      ...(consoleOutput ? { consoleOutput } : {}),
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     sendJson(res, 500, { cases: [], error: message });

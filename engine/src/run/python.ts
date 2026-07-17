@@ -3,7 +3,7 @@ import type { Judge } from '../types.js';
 import { PYTHON_TIMEOUT_MS } from './constants.js';
 import { runChild } from './child.js';
 import { buildPythonHarness } from './harnessPython.js';
-import { parseHarness, toRunResult } from './parse.js';
+import { parseRunResult } from './parse.js';
 import type { StudentRunResult } from './types.js';
 
 export async function runPython(
@@ -14,9 +14,11 @@ export async function runPython(
 ): Promise<StudentRunResult> {
   const script = buildPythonHarness(code, entry, cases, judge);
   const { stdout, stderr, timedOut } = await runChild('python', ['-'], {
-    env: { ...process.env, PYTHONUTF8: '1' },
+    // Unbuffered so student print()s survive a timeout kill — piped python is
+    // block-buffered, and the infinite-loop case is exactly when prints matter.
+    env: { ...process.env, PYTHONUTF8: '1', PYTHONUNBUFFERED: '1' },
     stdin: script,
     timeoutMs: PYTHON_TIMEOUT_MS,
   });
-  return toRunResult(cases, parseHarness(stdout, stderr, timedOut, PYTHON_TIMEOUT_MS), judge);
+  return parseRunResult(cases, stdout, stderr, timedOut, PYTHON_TIMEOUT_MS, judge);
 }

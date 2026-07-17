@@ -47,9 +47,9 @@ export default function RevealingText({
 
   const done = n >= total
   return (
-    <p className="say" onClick={finish} style={done ? undefined : { cursor: 'pointer' }}>
+    <div className="say" onClick={finish} style={done ? undefined : { cursor: 'pointer' }}>
       {renderMd(segs, n)}
       {!done && <span className="caret">▌</span>}
-    </p>
+    </div>
   )
 }

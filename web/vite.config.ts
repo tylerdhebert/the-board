@@ -22,6 +22,7 @@ export default defineConfig({
     proxy: {
       '/api': 'http://localhost:8787',
       '/lsp': { target: 'http://localhost:8787', ws: true },
+      '/ws/events': { target: 'ws://localhost:8787', ws: true },
     },
   },
 })

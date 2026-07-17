@@ -4,6 +4,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { WebSocketServer, type WebSocket } from 'ws';
+import { tryHandleAppEventsUpgrade } from './appEvents.js';
 import { appPaths } from './appPaths.js';
 
 const CSPROJ = `<Project Sdk="Microsoft.NET.Sdk">
@@ -237,6 +238,7 @@ export function attachLspBridge(server: http.Server): void {
     const { pathname } = new URL(req.url ?? '/', `http://${host}`);
     const match = /^\/lsp\/(csharp|python)$/.exec(pathname);
     if (!match) {
+      if (tryHandleAppEventsUpgrade(req, socket, head)) return;
       socket.destroy();
       return;
     }

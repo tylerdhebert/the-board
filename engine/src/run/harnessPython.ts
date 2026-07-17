@@ -1,5 +1,6 @@
 import type { CaseSpec } from '../exampleCases.js';
 import type { Judge } from '../types.js';
+import { CASE_SENTINEL } from './console.js';
 
 export function buildPythonHarness(code: string, entry: string, cases: CaseSpec[], judge?: Judge): string {
   const codeJson = JSON.stringify(JSON.stringify(code));
@@ -34,7 +35,8 @@ else:
     sys.exit(0)
 
 results = []
-for args in cases:
+for case_index, args in enumerate(cases):
+    print(f"${CASE_SENTINEL}{case_index}__", flush=True)
     try:
         ret = entry(*args)
         if judge is None:

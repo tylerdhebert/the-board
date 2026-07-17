@@ -1,18 +1,22 @@
-import type { ProblemSummary } from './api'
+import type { IngestJob, ProblemSummary } from './api'
 import { difficultyClass, shortDate, statusMark } from './appHelpers'
 
 export default function HeroLedger({
   problems,
+  ingestJobs,
   expanded,
   onLedgerRow,
   onResumeSession,
   onBeginCard,
+  onOpenIngest,
 }: {
   problems: ProblemSummary[]
+  ingestJobs: IngestJob[]
   expanded: string | null
   onLedgerRow: (p: ProblemSummary) => void
   onResumeSession: (id: string) => void
   onBeginCard: (name: string, label?: string) => void
+  onOpenIngest: (job: IngestJob) => void
 }) {
   return (
     <>
@@ -38,7 +42,7 @@ export default function HeroLedger({
         Hand me a problem — by name or a LeetCode link — and we'll work it out
         together. I ask the questions; you do the thinking.
       </p>
-      {problems.length === 0 ? (
+      {problems.length === 0 && ingestJobs.length === 0 ? (
         <p className="how">
           try: <span>two sum</span> &nbsp;·&nbsp; <span>house robber</span> &nbsp;·&nbsp;{' '}
           <span>container with most water</span>
@@ -46,6 +50,17 @@ export default function HeroLedger({
       ) : (
         <div className="ledger">
           <p className="eyebrow">the board so far</p>
+          {ingestJobs.map((job) => (
+            <div key={job.id} className="ledger-block">
+              <button type="button" className={`ledger-row ingest-row ${job.status}`} onClick={() => onOpenIngest(job)}>
+                <span className="mark ingest-mark" aria-label={job.status === 'running' ? 'ingesting' : 'ingest failed'}>
+                  {job.status === 'running' ? <span className="ledger-spinner" /> : 'x'}
+                </span>
+                <span className="title">{job.query}</span>
+                <span className="ledger-end"><span className="meta">{job.status === 'running' ? 'chalking...' : 'needs a retry'}</span></span>
+              </button>
+            </div>
+          ))}
           {problems.map((p) => {
             const { mark, className } = statusMark(p.status)
             const latest = p.sessions[0]

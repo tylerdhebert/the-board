@@ -144,6 +144,10 @@
 .ledger-row .mark-solved { color: var(--sky); }
 .ledger-row .mark-attempted { color: var(--amber); }
 .ledger-row .mark-new { color: var(--chalk-faint); }
+.ledger-row .ingest-mark { color: var(--amber); display: inline-grid; place-items: center; }
+.ledger-row.ingest-row.error .ingest-mark { color: var(--coral); }
+.ledger-row.ingest-row.error .title { color: var(--chalk-dim); }
+.ledger-spinner { width: 12px; height: 12px; border: 1.5px dashed var(--amber); border-radius: 50%; animation: spin 1.3s linear infinite; }
 .ledger-row .title {
   font-family: var(--display);
   font-weight: 700;
@@ -243,7 +247,13 @@
   max-width: 44ch;
   margin: 0;
 }
+.loading-cancel { background: transparent; color: var(--amber); font: 12px var(--mono); letter-spacing: 0.08em; text-transform: lowercase; padding: 7px 14px; cursor: pointer; }
+.load-error { color: var(--coral); font: 12px/1.6 var(--mono); max-width: 48ch; margin: 0; }
 @media (prefers-reduced-motion: reduce) { .spin-ring { animation: none; } }
+.toast-stack { position: fixed; right: 22px; bottom: 22px; z-index: 20; display: grid; gap: 8px; width: min(340px, calc(100vw - 44px)); }
+.toast { background: var(--slate-raise); color: var(--chalk); border: 0; padding: 11px 14px; text-align: left; font: 12px/1.4 var(--mono); cursor: pointer; }
+.toast.error { color: var(--coral); }
+.toast.canceled { color: var(--chalk-dim); }
 
 /* ---- board doodles: leftover chalk on the hero's empty side ---- */
 .doodles {

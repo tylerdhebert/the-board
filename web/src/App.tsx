@@ -9,8 +9,12 @@ import CodeEditor from './CodeEditor'
 import { parseMd, renderMd, type MdFigure } from './md'
 import {
   addTake,
+  appEventsWsUrl,
+  cancelIngest,
   chalkStress,
   createSession,
+  enqueueIngest,
+  getIngestJobs,
   getProblems,
   getSession,
   getSettings,
@@ -18,9 +22,11 @@ import {
   putSettings,
   runExamples,
   saveEditor,
-  startSession,
   submitTurn,
   type AppSettingsModels,
+  type ConsoleBlock,
+  type IngestEvent,
+  type IngestJob,
   type PersistedTake,
   type Problem,
   type ProblemSummary,
@@ -61,11 +67,13 @@ import type { CardState, Mode, Note, TeacherGesture } from './appTypes'
 import FanOverlay from './FanOverlay'
 import HeroLedger from './HeroLedger'
 import LoadingBoard from './LoadingBoard'
+import IngestLoadingBoard from './IngestLoadingBoard'
 import RevealingText from './RevealingText'
 import ScaffoldBlankSay from './ScaffoldBlankSay'
 import SettingsPanel from './SettingsPanel'
 import VocabBoard from './VocabBoard'
 import WindowControls from './WindowControls'
+import ToastStack, { type Toast } from './ToastStack'
 
 export { normalizeForDirty } from './appHelpers'
 
@@ -74,8 +82,26 @@ export { normalizeForDirty } from './appHelpers'
 // container-query threshold.
 const COMPACT_DESK_PX = 1100
 
+type ConsoleRun = { attempt: number; blocks: ConsoleBlock[] }
+type ActiveIngest = { id: string; query: string; status: IngestJob['status']; error?: string }
+
+function consolePlainText(entries: ConsoleRun[]): string {
+  return entries
+    .flatMap((run) => [
+      `---- run · attempt ${run.attempt} ----`,
+      ...run.blocks.flatMap((block) => [
+        ...(block.label ? [`---- ${block.label} ----`] : []),
+        block.text,
+      ]),
+    ])
+    .join('\n\n')
+}
+
 export default function App() {
   const [problems, setProblems] = useState<ProblemSummary[]>([])
+  const [ingestJobs, setIngestJobs] = useState<IngestJob[]>([])
+  const [activeIngest, setActiveIngest] = useState<ActiveIngest | null>(null)
+  const [toasts, setToasts] = useState<Toast[]>([])
   const [expanded, setExpanded] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [sessionId, setSessionId] = useState<string | null>(null)
@@ -95,6 +121,8 @@ export default function App() {
   const [error, setError] = useState<string | null>(null)
   const [takes, setTakes] = useState<PersistedTake[]>([])
   const [selectedTake, setSelectedTake] = useState<number | null>(null)
+  const [consoleEntries, setConsoleEntries] = useState<ConsoleRun[]>([])
+  const [consoleOpen, setConsoleOpen] = useState(false)
   const [running, setRunning] = useState(false)
   const [stressing, setStressing] = useState(false)
   const [attemptsCollapsed, setAttemptsCollapsed] = useState(false)
@@ -121,6 +149,7 @@ export default function App() {
   const deskRef = useRef<HTMLElement>(null)
   const notesRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const consoleOutputRef = useRef<HTMLDivElement>(null)
   const editorSaveRef = useRef<Promise<void>>(Promise.resolve())
   const noteStateTimersRef = useRef<Map<string, number>>(new Map())
   const noteStateSavesRef = useRef<Map<string, Promise<void>>>(new Map())
@@ -133,13 +162,81 @@ export default function App() {
   problemRef.current = problem
   const vocabRef = useRef(vocab)
   vocabRef.current = vocab
+  const activeIngestRef = useRef(activeIngest)
+  activeIngestRef.current = activeIngest
 
   function refreshProblems() {
     getProblems().then(setProblems).catch(() => {})
   }
 
+  function refreshIngestJobs() {
+    getIngestJobs().then((jobs) => setIngestJobs(jobs.filter((job) => job.status === 'running' || job.status === 'error'))).catch(() => {})
+  }
+
+  function dismissToast(id: number) {
+    setToasts((items) => items.filter((item) => item.id !== id))
+  }
+
+  function addToast(text: string, tone: Toast['tone']) {
+    const id = Date.now() + Math.floor(Math.random() * 1000)
+    setToasts((items) => [...items, { id, text, tone }].slice(-3))
+    window.setTimeout(() => dismissToast(id), 6000)
+  }
+
   useEffect(() => {
     refreshProblems()
+    refreshIngestJobs()
+  }, [])
+
+  useEffect(() => {
+    let socket: WebSocket | null = null
+    let retry: number | null = null
+    let stopped = false
+    const sync = () => {
+      refreshProblems()
+      refreshIngestJobs()
+    }
+    const connect = () => {
+      socket = new WebSocket(appEventsWsUrl())
+      socket.onopen = sync
+      socket.onmessage = (message) => {
+        let event: IngestEvent
+        try {
+          event = JSON.parse(String(message.data)) as IngestEvent
+        } catch {
+          return
+        }
+        if (event.type === 'ingest:started') {
+          refreshIngestJobs()
+        } else if (event.type === 'ingest:done') {
+          setIngestJobs((jobs) => jobs.filter((job) => job.id !== event.jobId))
+          refreshProblems()
+          addToast(`${event.title} is on the board`, 'done')
+          if (activeIngestRef.current?.id === event.jobId) {
+            setActiveIngest(null)
+            void beginCard(event.cardName, event.title)
+          }
+        } else if (event.type === 'ingest:error') {
+          setIngestJobs((jobs) => jobs.map((job) => job.id === event.jobId ? { ...job, status: 'error', error: event.error } : job))
+          setActiveIngest((job) => job?.id === event.jobId ? { ...job, status: 'error', error: event.error } : job)
+          addToast(event.error, 'error')
+        } else {
+          setIngestJobs((jobs) => jobs.filter((job) => job.id !== event.jobId))
+          setActiveIngest((job) => job?.id === event.jobId ? null : job)
+          addToast(`${event.query} canceled`, 'canceled')
+        }
+      }
+      socket.onclose = () => {
+        if (!stopped) retry = window.setTimeout(connect, 800)
+      }
+      socket.onerror = () => socket?.close()
+    }
+    connect()
+    return () => {
+      stopped = true
+      if (retry != null) window.clearTimeout(retry)
+      socket?.close()
+    }
   }, [])
 
   useEffect(() => {
@@ -148,6 +245,16 @@ export default function App() {
       noteStateTimersRef.current.clear()
     }
   }, [sessionId])
+
+  useEffect(() => {
+    setConsoleEntries([])
+    setConsoleOpen(false)
+  }, [sessionId])
+
+  useEffect(() => {
+    const output = consoleOutputRef.current
+    if (output) output.scrollTop = output.scrollHeight
+  }, [consoleOpen, consoleEntries])
 
   useEffect(() => {
     if (!figureView) return
@@ -622,13 +729,23 @@ export default function App() {
     const match = problems.find(
       (c) => c.title.toLowerCase() === q.toLowerCase() || c.name === q.toLowerCase(),
     )
+    if (!match) {
+      setError(null)
+      try {
+        await enqueueIngest(q)
+        setQuery('')
+        refreshIngestJobs()
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err))
+      }
+      return
+    }
     setLoadingQuery(q)
-    setIngesting(!match)
+    setIngesting(false)
     setLoading(true)
     setError(null)
     try {
-      const res = match ? await createSession(match.name) : await startSession(q)
-      applyFreshSession(res)
+      applyFreshSession(await createSession(match.name))
     } catch (err) {
       setError(
         (err instanceof Error ? err.message : String(err)) +
@@ -636,6 +753,19 @@ export default function App() {
       )
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function cancelActiveIngest() {
+    if (!activeIngest) return
+    const job = activeIngest
+    setActiveIngest(null)
+    if (job.status !== 'running') return
+    try {
+      await cancelIngest(job.id)
+      setIngestJobs((jobs) => jobs.filter((item) => item.id !== job.id))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
     }
   }
 
@@ -816,8 +946,14 @@ export default function App() {
     setRunning(true)
     setError(null)
     try {
-      const { takes: next } = await runExamples(sessionId, code, lang)
+      const { takes: next, consoleOutput } = await runExamples(sessionId, code, lang)
       applyTakes(next)
+      // Array.isArray also shields against a stale API server still sending the
+      // old string-shaped consoleOutput.
+      if (Array.isArray(consoleOutput) && consoleOutput.length) {
+        const attempt = next[next.length - 1]?.seq ?? next.length
+        setConsoleEntries((entries) => [...entries, { attempt, blocks: consoleOutput }])
+      }
       if (next.some(takeAllPass)) setSessionSolved(true)
       refreshProblems()
     } catch (err) {
@@ -1006,7 +1142,14 @@ export default function App() {
           type="button"
           className="wordmark"
           onClick={() => {
-            if (!problem || loading) return
+            if (loading) return
+            // Leaving the ingest loading view only closes the view — the job
+            // keeps running server-side and its board row keeps spinning.
+            if (!problem) {
+              setActiveIngest(null)
+              return
+            }
+            setActiveIngest(null)
             setSessionId(null)
             setProblem(null)
             setNotes([])
@@ -1022,7 +1165,7 @@ export default function App() {
             setError(null)
             setExpanded(null)
           }}
-          title={problem ? 'back to the board' : undefined}
+          title={problem || activeIngest ? 'back to the board' : undefined}
         >
           <span className="sigma">Σ</span>
           <b>The Board</b>
@@ -1074,8 +1217,15 @@ export default function App() {
 
       <div className="stage" style={{ gridTemplateColumns: `1fr ${marginWidth}px` }}>
         <main className="desk" ref={deskRef}>
-          {loading ? (
-            <LoadingBoard query={loadingQuery} ingesting={ingesting} />
+          {loading || activeIngest ? (
+            activeIngest ? (
+              <IngestLoadingBoard
+                query={activeIngest.query}
+                error={activeIngest.error}
+                onCancel={() => void cancelActiveIngest()}
+                actionLabel={activeIngest.status === 'running' ? 'cancel' : 'back to board'}
+              />
+            ) : <LoadingBoard query={loadingQuery} ingesting={ingesting} />
           ) : problem ? (
             <>
               <div className="problem-work">
@@ -1256,6 +1406,52 @@ export default function App() {
                         onPointInvalid={() => setPoint(null)}
                       />
                     </div>
+                    <section className={`student-console${consoleOpen ? ' open' : ''}`}>
+                      <div className="student-console-header">
+                        <button
+                          type="button"
+                          className="student-console-toggle"
+                          onClick={() => setConsoleOpen((open) => !open)}
+                          aria-expanded={consoleOpen}
+                        >
+                          &gt;_ Console
+                        </button>
+                        <div className="student-console-actions">
+                          <button type="button" onClick={() => setConsoleEntries([])}>clear</button>
+                          <button
+                            type="button"
+                            onClick={() => void navigator.clipboard.writeText(consolePlainText(consoleEntries)).catch(() => {})}
+                            disabled={consoleEntries.length === 0}
+                          >
+                            copy
+                          </button>
+                        </div>
+                      </div>
+                      {consoleOpen && (
+                        <div
+                          ref={consoleOutputRef}
+                          className={`student-console-output${consoleEntries.length ? '' : ' empty'}`}
+                        >
+                          {consoleEntries.length ? consoleEntries.map((run) => (
+                            <div className="student-console-run" key={run.attempt}>
+                              <div className="student-console-rule">
+                                <span>run · attempt {run.attempt}</span>
+                              </div>
+                              {run.blocks.map((block, index) => (
+                                <div className="student-console-block" key={`${run.attempt}-${index}`}>
+                                  {block.label && (
+                                    <div className="student-console-rule case">
+                                      <span>{block.label}</span>
+                                    </div>
+                                  )}
+                                  <pre>{block.text}</pre>
+                                </div>
+                              ))}
+                            </div>
+                          )) : 'no output yet — print from your code and run'}
+                        </div>
+                      )}
+                    </section>
                   </div>
                   {takes.length > 0 && (
                     <aside
@@ -1396,10 +1592,12 @@ export default function App() {
           ) : (
             <HeroLedger
               problems={problems}
+              ingestJobs={ingestJobs}
               expanded={expanded}
               onLedgerRow={onLedgerRow}
               onResumeSession={(id) => void resumeSession(id)}
               onBeginCard={(name, label) => void beginCard(name, label)}
+              onOpenIngest={(job) => setActiveIngest({ id: job.id, query: job.query, status: job.status, error: job.error })}
             />
           )}
         </main>
@@ -1495,7 +1693,7 @@ export default function App() {
                     onChange={(blankIndex, value) => setBlankValue(i, blankIndex, value)}
                   />
                 ) : (
-                  <p className="say">
+                  <div className="say">
                     {n.role === 'tutor' ? (
                       renderMd(parseMd(n.text))
                     ) : (() => {
@@ -1508,7 +1706,7 @@ export default function App() {
                         </>
                       )
                     })()}
-                  </p>
+                  </div>
                 )}
                 {hasScaffoldBlanks(n.mode, n.text) && !n.revealing && !n.sentBack && (
                   <button
@@ -1641,6 +1839,7 @@ export default function App() {
           </div>
         </aside>
       </div>
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
       {figureView && (
         <div
           className="figure-modal"

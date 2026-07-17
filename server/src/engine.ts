@@ -13,6 +13,7 @@ import {
   type SessionModels,
 } from '../../engine/src/index.js';
 import { ingest, verifyCard } from '../../engine/src/ingest.js';
+import { LlmCanceledError } from '../../engine/src/llm.js';
 import { inlineFigures, stripFigureRefs } from '../../engine/src/leetcode.js';
 import { oracleExpectedOutputs } from '../../engine/src/lcOracle.js';
 import { extractCases, type CaseSpec } from '../../engine/src/exampleCases.js';
@@ -142,7 +143,7 @@ export async function loadSnippets(name: string): Promise<CodeSnippet[]> {
 
 export async function getOrIngestCard(
   query: string,
-  opts?: { client?: LLMClient; model?: string },
+  opts?: { client?: LLMClient; model?: string; signal?: AbortSignal },
 ): Promise<{ card: ProblemCard; verified: boolean; cached: boolean; snippets: CodeSnippet[] }> {
   const slug = toSlug(query);
   assertSafeCardName(slug);
@@ -171,7 +172,13 @@ export async function getOrIngestCard(
   const client = opts?.client ?? createClient('codex');
   const { card } = await ingest(client, stripFigureRefs(problem.statement), model, {
     metaData: problem.metaData,
+    signal: opts?.signal,
+    inactivityMs: 600_000,
   });
+  // A cancel that lands while the LLM call is in flight rejects the call, but
+  // one that lands between stages doesn't — without these checks a "canceled"
+  // job would still run the oracle + verification and persist the card.
+  if (opts?.signal?.aborted) throw new LlmCanceledError();
   await applyLeetCodeOracle(card, problem);
   card.difficulty = problem.difficulty;
   // Trusted-source-wins (same move as judge): the verbatim LC markdown replaces
@@ -181,6 +188,7 @@ export async function getOrIngestCard(
   if (problem.constraintsMd) card.constraints = problem.constraintsMd;
   card.url = problem.url;
   if (figures.length > 0) card.figures = figures;
+  if (opts?.signal?.aborted) throw new LlmCanceledError();
   const verification = await verifyCard(card);
   if (!verification.ok) {
     const failing = verification.cases
@@ -190,6 +198,7 @@ export async function getOrIngestCard(
     const detail = verification.error ?? (failing || 'one or more verification cases failed');
     throw new Error(`ingest verification failed: ${detail}`);
   }
+  if (opts?.signal?.aborted) throw new LlmCanceledError();
   await writeFile(cachePath, JSON.stringify(card, null, 2) + '\n', 'utf8');
   await writeFile(snippetsPath, JSON.stringify(problem.codeSnippets, null, 2) + '\n', 'utf8');
   return { card, verified: verification.ok, cached: false, snippets: problem.codeSnippets };

@@ -114,6 +114,12 @@
   font-size: 17px;
   transition: transform 200ms ease;
 }
+/* Monaco only injects the per-glyph codicon content rules when an editor
+   mounts — on the home board there is no editor, so without our own rule the
+   gear renders empty and the button collapses to 0x0. The @font-face itself
+   is statically bundled; \eaf8 is codicon "gear" (verified against the live
+   font). */
+.stripbtn.cog .codicon-gear::before { content: '\eaf8'; }
 .stripbtn.cog:hover .codicon { transform: rotate(40deg); }
 
 /* narrow windows: the tagline is decoration — give its width to the grab zone */

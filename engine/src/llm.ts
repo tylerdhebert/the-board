@@ -12,8 +12,27 @@ export interface LLMRequest {
   label?: string;
   /** Working directory for CLI backends (teacher scratch). */
   cwd?: string;
+  /** Override the no-output watchdog for this individual CLI call. */
+  inactivityMs?: number;
+  /** Cancel the CLI process tree when the caller no longer needs this work. */
+  signal?: AbortSignal;
 }
 export interface LLMClient { complete(req: LLMRequest): Promise<string> }
+
+/** A caller-initiated cancellation, distinct from a failed or stalled CLI call. */
+export class LlmCanceledError extends Error {
+  readonly code = 'LLM_CANCELED';
+
+  constructor() {
+    super('LLM request canceled');
+    this.name = 'LlmCanceledError';
+  }
+}
+
+export function isLlmCanceledError(err: unknown): err is LlmCanceledError {
+  return err instanceof LlmCanceledError ||
+    (err instanceof Error && (err as Error & { code?: string }).code === 'LLM_CANCELED');
+}
 
 // A CLI stream can stall silently and never exit (observed 2026-07-09: codex
 // emitted one reasoning chunk then went quiet forever, hanging /api/start).
@@ -24,56 +43,86 @@ const CLI_INACTIVITY_MS = Number(process.env.TUTOR_CLI_INACTIVITY_MS ?? 120_000)
 // anyway (a kill-race orphan can hold the stdio pipes open forever).
 const KILL_GRACE_MS = 5_000;
 
-export function killTree(pid: number): void {
+export function killTree(pid: number): Promise<boolean> {
   if (process.platform === 'win32') {
     // codex is a 3-deep chain (shim -> node -> codex.exe + its repl runtime);
     // child.kill() would only take out the shim and orphan the rest.
-    spawn('taskkill', ['/PID', String(pid), '/T', '/F']).on('error', () => {});
+    return new Promise((resolve) => {
+      const killer = spawn('taskkill', ['/PID', String(pid), '/T', '/F']);
+      killer.once('error', () => resolve(false));
+      killer.once('close', (code) => resolve(code === 0));
+    });
   } else {
     try {
       process.kill(-pid, 'SIGKILL');
     } catch {
       try { process.kill(pid, 'SIGKILL'); } catch { /* already gone */ }
     }
+    return Promise.resolve(true);
   }
 }
 
-function runCli(
+export function runCli(
   command: string,
   args: string[],
   stdin: string,
   env: NodeJS.ProcessEnv,
-  opts?: { cwd?: string },
+  opts?: { cwd?: string; inactivityMs?: number; signal?: AbortSignal },
 ): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
+    if (opts?.signal?.aborted) {
+      reject(new LlmCanceledError());
+      return;
+    }
     const child = spawn(command, args, { env, cwd: opts?.cwd });
 
     const stdoutChunks: Buffer[] = [];
     const stderrChunks: Buffer[] = [];
     let timedOut = false;
+    let aborted = false;
     let settled = false;
     let watchdog: NodeJS.Timeout | undefined;
+    const inactivityMs = opts?.inactivityMs ?? CLI_INACTIVITY_MS;
+    const onAbort = () => {
+      if (settled) return;
+      aborted = true;
+      if (child.pid == null) {
+        fail(new LlmCanceledError());
+      } else {
+        void killTree(child.pid).then((treeKilled) => {
+          if (!treeKilled) child.kill();
+        }).finally(() => {
+          setTimeout(() => fail(new LlmCanceledError()), KILL_GRACE_MS).unref();
+        });
+      }
+    };
     const fail = (err: Error) => {
       if (settled) return;
       settled = true;
       clearTimeout(watchdog);
+      opts?.signal?.removeEventListener('abort', onAbort);
       reject(err);
     };
     const resetWatchdog = () => {
       clearTimeout(watchdog);
       watchdog = setTimeout(() => {
         timedOut = true;
-        if (child.pid != null) killTree(child.pid);
+        if (child.pid != null) {
+          void killTree(child.pid).then((treeKilled) => {
+            if (!treeKilled) child.kill();
+          });
+        }
         // 'close' waits for the stdio pipes, and a kill-race survivor (an orphaned
         // grandchild holding the inherited handles) can keep them open forever —
         // after the kill, stop waiting for it.
         setTimeout(() => fail(new Error(
-          `${command} produced no output for ${CLI_INACTIVITY_MS / 1000}s and was killed ` +
+          `${command} produced no output for ${inactivityMs / 1000}s and was killed ` +
           '(stalled stream?) — try again',
         )), KILL_GRACE_MS).unref();
-      }, CLI_INACTIVITY_MS);
+      }, inactivityMs);
     };
     resetWatchdog();
+    opts?.signal?.addEventListener('abort', onAbort, { once: true });
 
     // Drain stdout even when the answer arrives elsewhere (codex -o file):
     // an unread pipe fills at ~64KB and deadlocks the child. Any output also
@@ -94,15 +143,20 @@ function runCli(
     child.on('close', (code) => {
       if (settled) return;
       clearTimeout(watchdog);
+      if (aborted) {
+        fail(new LlmCanceledError());
+        return;
+      }
       const stdout = Buffer.concat(stdoutChunks).toString('utf-8');
       const stderr = Buffer.concat(stderrChunks).toString('utf-8');
       if (timedOut) {
         fail(new Error(
-          `${command} produced no output for ${CLI_INACTIVITY_MS / 1000}s and was killed ` +
+          `${command} produced no output for ${inactivityMs / 1000}s and was killed ` +
           '(stalled stream?) — try again',
         ));
       } else if (code === 0) {
         settled = true;
+        opts?.signal?.removeEventListener('abort', onAbort);
         resolve({ stdout, stderr });
       } else {
         fail(new Error(`${command} exited with code ${code}: ${stderr}`));
@@ -136,7 +190,7 @@ export class CodexCliClient implements LLMClient {
         args,
         req.prompt,
         { ...process.env, PYTHONUTF8: '1' },
-        { cwd: req.cwd },
+        { cwd: req.cwd, inactivityMs: req.inactivityMs, signal: req.signal },
       );
       const output = await readFile(tempfile, 'utf-8');
       return output.trim();
@@ -162,7 +216,7 @@ export class ClaudeCliClient implements LLMClient {
       args,
       req.prompt,
       { ...process.env },
-      { cwd: req.cwd },
+      { cwd: req.cwd, inactivityMs: req.inactivityMs, signal: req.signal },
     );
     return stdout.trim();
   }

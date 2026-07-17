@@ -6,7 +6,7 @@ import type { Judge } from '../types.js';
 import { SERVER_DIR, TS_TIMEOUT_MS } from './constants.js';
 import { runChild } from './child.js';
 import { buildTsHarness } from './harnessTs.js';
-import { parseHarness, toRunResult } from './parse.js';
+import { parseRunResult } from './parse.js';
 import type { StudentRunResult } from './types.js';
 
 export async function runTsJs(
@@ -32,7 +32,7 @@ export async function runTsJs(
       env,
       timeoutMs: TS_TIMEOUT_MS,
     });
-    return toRunResult(cases, parseHarness(stdout, stderr, timedOut, TS_TIMEOUT_MS), judge);
+    return parseRunResult(cases, stdout, stderr, timedOut, TS_TIMEOUT_MS, judge);
   } finally {
     await rm(dir, { recursive: true, force: true }).catch(() => {});
   }
