@@ -1,7 +1,7 @@
 # Handoff — socratic-tutor
 
 Living state doc so a new chat can resume without re-deriving everything. Pair
-with `DESIGN.md` (architecture + validation findings). Last updated 2026-07-09.
+with `DESIGN.md` (architecture + validation findings). Last updated 2026-07-16.
 
 ## What this is
 A Socratic coding tutor that **leads you to the answer and never hands it over**.
@@ -63,9 +63,13 @@ takes ~30–60s to ingest, then it's cached in `cards/`.
 restart 8787 to pick it up (tsx isn't in watch mode). Web changes hot-reload.
 
 ## Conventions & gotchas (learned the hard way)
-- **Implementer = Grok 4.5 via Cursor** (`grok-4.5-xhigh`), driven through the
-  `cli-subagents` skill's `cursor-subagent.ps1`. Claude specs + reviews every
-  diff. See `.agent-tasks/*.md` for the increment specs.
+- **Implementer = codex CLI** (`codex exec`, gpt-5.6 family, run dirs under
+  `.codex-subagents/codex/<slug>/`), per the `cli-subagents` skill. Claude
+  scouts the seams, writes a precise prompt file, runs an independent
+  `codex exec review --uncommitted` pass, reads the full diff personally, and
+  re-runs the verify gates. (Historical: earlier rounds used Grok 4.5 via
+  Cursor with specs in `.agent-tasks/*.md` — the Cursor notes below are kept
+  for if that path is ever revived.)
 - **Cursor arg-parsing bug:** the runner appends the prompt as a positional arg,
   so any `--flag` in the prompt leaks into `cursor-agent`'s argv and crashes it.
   ALWAYS put the real spec in a file (`.agent-tasks/foo.md`) and give cursor a
@@ -243,7 +247,60 @@ restart 8787 to pick it up (tsx isn't in watch mode). Web changes hot-reload.
    - **Backlog:** API-client backends (waiting on keys), mutation-problem
      run support (infer check mode at ingest), README refresh (very stale).
 
-## CURRENT STATE (2026-07-10, Round A session — read this first)
+## CURRENT STATE (2026-07-16 — read this first)
+
+Everything below in the 07-10 section has long since shipped. Released:
+**v0.5.0** (github.com/tylerdhebert/the-board), which added the two features
+from the 07-16 session, both implemented via codex subagents and reviewed:
+
+- **Student console** — ephemeral per-case stdout capture. Harnesses emit
+  `__TUTOR_CASE_9F7A__<i>__` sentinels to real stdout (survives timeout kills;
+  python runs `PYTHONUNBUFFERED`); `engine/src/run/parse.ts` splits into
+  labeled blocks; `runs.ts` strips them before ANY persistence (takes/lastRun
+  must never store prints) and returns `consoleOutput`; chalk terminal strip
+  docked over Monaco's bottom edge. Buffer = source of truth: derived output
+  is regenerated, never stored — keep it that way.
+- **Queued ingest** — `POST /api/ingest` background jobs (in-memory,
+  slug-deduped, cancellable via AbortSignal → tree-kill), lifecycle events on
+  `/ws/events`, ledger spinner rows, cancel from the loading view, toasts.
+  Ingest LLM calls get a 600s inactivity leash (interactive roles keep 120s).
+  Cancellation is checked between post-LLM stages in `getOrIngestCard`.
+- Also: DevTools shortcut gated to `debugSurface` (`TUTOR_DEBUG=1` re-enables
+  on installed builds), codicon gear glyph self-supplied in `layout-strip.css`
+  (monaco only injects glyph rules when an editor mounts — home board has
+  none), `<div className="say">` not `<p>` (code blocks in tutor notes),
+  wordmark exits the ingest loading view.
+
+### Improvement / unfuck list (agreed 2026-07-16, roughly priority-ordered)
+
+1. **Packaged-build observability**: api child stdout goes nowhere in
+   installed builds (only a 20-line stderr ring on crash). Add timestamped
+   `%APPDATA%\The Board\logs\api.log` + an "open logs folder" affordance
+   (~30 lines in `desktop/main.mjs`, `startPackagedApi`).
+2. **Startup doctor** (Phase 3, still open): probe codex/claude/python/
+   dotnet/csharp-ls at boot, gray out missing features. Missing tools
+   currently fail cryptically at point of use.
+3. **Acceptance test never run**: a real packaged-build ingest (Subarray Sum
+   Equals K) through the 10-min leash. Also unverified live: dev `/ws/events`
+   vite proxy, toast error/stacking states.
+4. **Ingest queue edges**: app restart mid-ingest silently drops the spinner
+   row (jobs are in-memory — surface "didn't survive" on re-sync); failed
+   ingest has no retry affordance; `LoadingBoard` vs `IngestLoadingBoard` are
+   near-duplicate components (new one's copy is worse — merge, keep the
+   "working it out myself first — so I never mislead you…" voice);
+   client-side sync `/api/start` path for unknown queries is now dead-ish.
+5. **Mutation/in-place problems unsupported** — whole LeetCode class rejected
+   with "in-place/mutation problems aren't supported yet" (`run/parse.ts`).
+6. **TS/JS prints can drop on timeout kill** (node pipe buffering; python
+   already fixed via PYTHONUNBUFFERED — no direct node equivalent, needs a
+   flush strategy in the harness).
+7. **Hygiene**: web main chunk ~4MB (code-split); `routes/ingest.ts` deep-
+   imports `../../../engine/src/llm.js` instead of the `server/src/engine.ts`
+   seam; api under tsx without watch (restart friction — consider `tsx watch`
+   in dev.mjs); README dev section refresh; API-client backends (direct
+   Anthropic/OpenAI APIs) still on the backlog.
+
+## HISTORICAL STATE (2026-07-10, Round A session — all shipped since)
 
 Concise pickup list for the next agent (codex):
 
