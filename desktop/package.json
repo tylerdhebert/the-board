@@ -1,7 +1,7 @@
 {
   "name": "the-board-desktop",
   "productName": "The Board",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "The Board — a Socratic coding tutor",
   "author": "Tyler",
   "private": true,
